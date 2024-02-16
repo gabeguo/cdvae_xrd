@@ -4,8 +4,10 @@ from typing import List
 import hydra
 import numpy as np
 import torch
+print(torch.__version__)
 import omegaconf
 import pytorch_lightning as pl
+print(pl.__version__)
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import seed_everything, Callback
@@ -138,21 +140,25 @@ def run(cfg: DictConfig) -> None:
         ckpt = None
           
     hydra.utils.log.info("Instantiating the Trainer")
+    print('instantiating trainer')
     trainer = pl.Trainer(
         default_root_dir=hydra_dir,
         logger=wandb_logger,
         callbacks=callbacks,
         deterministic=cfg.train.deterministic,
         check_val_every_n_epoch=cfg.logging.val_check_interval,
-        progress_bar_refresh_rate=cfg.logging.progress_bar_refresh_rate,
-        resume_from_checkpoint=ckpt,
+        # progress_bar_refresh_rate=cfg.logging.progress_bar_refresh_rate,
+        # resume_from_checkpoint=ckpt,
         **cfg.train.pl_trainer,
     )
+    print('logging hyperparameters')
     log_hyperparameters(trainer=trainer, model=model, cfg=cfg)
 
+    print('starting training')
     hydra.utils.log.info("Starting training!")
     trainer.fit(model=model, datamodule=datamodule)
 
+    print('starting testing')
     hydra.utils.log.info("Starting testing!")
     trainer.test(datamodule=datamodule)
 
@@ -161,10 +167,14 @@ def run(cfg: DictConfig) -> None:
         wandb_logger.experiment.finish()
 
 
-@hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="default")
+@hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="default", version_base="1.3.2")
 def main(cfg: omegaconf.DictConfig):
     run(cfg)
 
 
 if __name__ == "__main__":
+    from torch_scatter import scatter
+    from torch_sparse import SparseTensor
+    tensor = torch.zeros(3, 5).cuda()
+    print('moo')
     main()

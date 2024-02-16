@@ -41,7 +41,7 @@ class BaseModule(pl.LightningModule):
         scheduler = hydra.utils.instantiate(
             self.hparams.optim.lr_scheduler, optimizer=opt
         )
-        return {"optimizer": opt, "lr_scheduler": scheduler, "monitor": "val_loss"}
+        return {"optimizer": opt, "lr_scheduler": scheduler, "monitor": "train_loss"}
 
 
 class CrystGNN_Supervise(BaseModule):
