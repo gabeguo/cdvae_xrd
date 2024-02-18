@@ -62,6 +62,7 @@ def create_materials(frac_coords, num_atoms, atom_types, lengths, angles):
     print(len(atom_types))
     start_idx = 0
 
+    nan_count = 0
     for i in tqdm(range(len(num_atoms))):
         curr_num_atoms = num_atoms[i]
         # take these atoms
@@ -79,6 +80,9 @@ def create_materials(frac_coords, num_atoms, atom_types, lengths, angles):
         alpha, beta, gamma = tuple(angles[i].tolist())
         transform_matrix = generate_transform_matrix(a=a, b=b, c=c, alpha=alpha, beta=beta, gamma=gamma)
         curr_coords = curr_coords.numpy() @ transform_matrix
+        if np.any(np.isnan(curr_coords)):
+            nan_count += 1
+        curr_coords = np.nan_to_num(curr_coords)
 
         # add materials
         the_coords.append(curr_coords)
@@ -86,6 +90,7 @@ def create_materials(frac_coords, num_atoms, atom_types, lengths, angles):
 
         assert len(curr_coords) == len(curr_elements)
 
+    print(f'{nan_count} out of {len(the_coords)} nan')
     assert len(the_coords) == len(the_atom_types)
 
     return the_coords, the_atom_types
@@ -186,7 +191,7 @@ def plot_material_single(curr_coords, curr_atom_types, idx=0):
     return
 
 if __name__ == "__main__":
-    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/perov/eval_recon.pt'
+    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/carbon/eval_recon.pt'
 
     results = torch.load(filepath)
 
