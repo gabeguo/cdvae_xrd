@@ -202,11 +202,12 @@ def prop_model_eval(eval_model_name, crystal_array_list):
         worker_init_fn=worker_init_fn)
 
     model.eval()
+    model = model.cuda()
 
     all_preds = []
 
     for batch in loader:
-        preds = model(batch)
+        preds = model(batch.cuda())
         model.scaler.match_device(preds)
         scaled_preds = model.scaler.inverse_transform(preds)
         all_preds.append(scaled_preds.detach().cpu().numpy())
