@@ -45,10 +45,20 @@ DEFAULT_RADIUS = 0.1
 # Thanks https://www.ucl.ac.uk/~rmhajc0/frorth.pdf
 def generate_transform_matrix(a, b, c, alpha, beta, gamma):
     n2 = (np.cos(alpha)-np.cos(gamma)*np.cos(beta))/np.sin(gamma)
+    # Thanks https://gist.github.com/Bismarrck/a68da01f19b39320f78a
+    # http://www.cryst.chem.uu.nl/lutz/ecacomsig/pdfs-warwick/Richard%20Cooper-Geometry%20and%20Space%20Groups.pdf
+    # For numerical stability
+    V = 1.0 - np.cos(alpha)**2.0 - np.cos(beta)**2.0 - np.cos(gamma)**2.0 + \
+        2.0 * np.cos(alpha) * np.cos(beta) * np.cos(gamma)
+    # M = np.array([
+    #     [a,0,0],
+    #     [b*np.cos(gamma),b*np.sin(gamma),0], 
+    #     [c*np.cos(beta),c*n2,c*np.sqrt(np.sin(beta)**2-n2**2)]
+    # ])
     M = np.array([
         [a,0,0],
         [b*np.cos(gamma),b*np.sin(gamma),0], 
-        [c*np.cos(beta),c*n2,c*np.sqrt(np.sin(beta)**2-n2**2)]
+        [c*np.cos(beta),c*n2,c*V/np.sin(gamma)]
     ])
     return M # left-multiply coordinates
 
@@ -191,7 +201,7 @@ def plot_material_single(curr_coords, curr_atom_types, idx=0):
     return
 
 if __name__ == "__main__":
-    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/carbon/eval_recon.pt'
+    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_recon.pt'
 
     results = torch.load(filepath)
 
