@@ -4,7 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from pymatgen.core.periodic_table import Element
-
+from pymatgen.core.structure import Structure
+from pymatgen.core.lattice import Lattice
+from scripts.eval_utils import get_crystals_list
+import warnings
+import os
 
 # Thanks ChatGPT!
 # Thanks https://www.umass.edu/microbio/chime/pe_beta/pe/shared/cpk-rgb.htm
@@ -40,70 +44,32 @@ CPK_COLORS = {
 }
 DEFAULT_COLOR = [255, 20, 147] # Default
 DEFAULT_RADIUS = 0.1
-
-# Thanks https://chemistry.stackexchange.com/questions/136836/converting-fractional-coordinates-into-cartesian-coordinates-for-crystallography
-# Thanks https://www.ucl.ac.uk/~rmhajc0/frorth.pdf
-def generate_transform_matrix(a, b, c, alpha, beta, gamma):
-    n2 = (np.cos(alpha)-np.cos(gamma)*np.cos(beta))/np.sin(gamma)
-    # Thanks https://gist.github.com/Bismarrck/a68da01f19b39320f78a
-    # http://www.cryst.chem.uu.nl/lutz/ecacomsig/pdfs-warwick/Richard%20Cooper-Geometry%20and%20Space%20Groups.pdf
-    # For numerical stability
-    V = 1.0 - np.cos(alpha)**2.0 - np.cos(beta)**2.0 - np.cos(gamma)**2.0 + \
-        2.0 * np.cos(alpha) * np.cos(beta) * np.cos(gamma)
-    # M = np.array([
-    #     [a,0,0],
-    #     [b*np.cos(gamma),b*np.sin(gamma),0], 
-    #     [c*np.cos(beta),c*n2,c*np.sqrt(np.sin(beta)**2-n2**2)]
-    # ])
-    M = np.array([
-        [a,0,0],
-        [b*np.cos(gamma),b*np.sin(gamma),0], 
-        [c*np.cos(beta),c*n2,c*V/np.sin(gamma)]
-    ])
-    return M # left-multiply coordinates
+RESULTS_FOLDER = 'dummy_vis'
 
 def create_materials(frac_coords, num_atoms, atom_types, lengths, angles):
-    print('creating materials')
-    the_coords = list()
-    the_atom_types = list()
+    crystals_list = get_crystals_list(frac_coords=frac_coords, atom_types=atom_types, lengths=lengths, angles=angles, num_atoms=num_atoms)
+    all_coords = list()
+    all_atom_types = list()
+    for curr_crystal in tqdm(crystals_list):
+        curr_structure = Structure(
+            lattice=Lattice.from_parameters(
+                *(curr_crystal['lengths'].tolist() + curr_crystal['angles'].tolist())),
+            species=curr_crystal['atom_types'], coords=curr_crystal['frac_coords'], coords_are_cartesian=False)
+        print(curr_crystal['angles'].tolist())
+        curr_coords = list()
+        curr_atom_types = list()
 
-    num_atoms = num_atoms.tolist()
-    atom_types = [Element.from_Z(el) for el in atom_types.tolist()]
-    print(len(atom_types))
-    start_idx = 0
-
-    nan_count = 0
-    for i in tqdm(range(len(num_atoms))):
-        curr_num_atoms = num_atoms[i]
-        # take these atoms
-        low = start_idx
-        high = start_idx + curr_num_atoms
-        curr_coords = frac_coords[low:high]
-        assert curr_coords.shape == (curr_num_atoms, 3)
-        curr_elements = atom_types[low:high]
+        for site in curr_structure:
+            curr_coords.append([site.x, site.y, site.z])
+            curr_atom_types.append(Element(site.species_string))
         
-        # change start idx
-        start_idx += curr_num_atoms
+        all_coords.append(np.array(curr_coords))
+        all_atom_types.append(curr_atom_types)
+    
+    assert len(all_coords) == len(all_atom_types)
+    assert len(all_coords) == len(num_atoms)
 
-        # calculate cartesian coordinates
-        a, b, c = tuple(lengths[i].tolist())
-        alpha, beta, gamma = tuple(angles[i].tolist())
-        transform_matrix = generate_transform_matrix(a=a, b=b, c=c, alpha=alpha, beta=beta, gamma=gamma)
-        curr_coords = curr_coords.numpy() @ transform_matrix
-        if np.any(np.isnan(curr_coords)):
-            nan_count += 1
-        curr_coords = np.nan_to_num(curr_coords)
-
-        # add materials
-        the_coords.append(curr_coords)
-        the_atom_types.append(curr_elements)
-
-        assert len(curr_coords) == len(curr_elements)
-
-    print(f'{nan_count} out of {len(the_coords)} nan')
-    assert len(the_coords) == len(the_atom_types)
-
-    return the_coords, the_atom_types
+    return all_coords, all_atom_types
 
 # Thanks ChatGPT!
 # Function to generate sphere coordinates
@@ -128,16 +94,16 @@ def ms(center, radius, n_points=20):
     Z = radius * np.cos(v) + z
     return (X, Y, Z)
 
-def plot_materials(the_coords, atom_types, num_materials=5):
+def plot_materials(the_coords, atom_types, output_dir, num_materials=5):
     for i in range(min(len(the_coords), num_materials)):
         curr_coords = the_coords[i]
         curr_atom_types = atom_types[i]
 
-        plot_material_single(curr_coords, curr_atom_types, idx=i)
+        plot_material_single(curr_coords, curr_atom_types, output_dir, idx=i)
     
     return
 
-def plot_material_single(curr_coords, curr_atom_types, idx=0):
+def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
     print(curr_coords)
     print(curr_atom_types)
     assert len(curr_atom_types) == len(curr_coords)
@@ -196,7 +162,7 @@ def plot_material_single(curr_coords, curr_atom_types, idx=0):
 
     print('moo')
 
-    fig.write_image(f'dummy{idx}.png')
+    fig.write_image(os.path.join(output_dir, f'dummy{idx}.png'))
 
     return
 
@@ -222,5 +188,7 @@ if __name__ == "__main__":
     lengths = results['lengths'].squeeze()
     angles = results['angles'].squeeze()
 
+    os.makedirs(RESULTS_FOLDER, exist_ok=True)
+
     the_coords, atom_types = create_materials(frac_coords, num_atoms, atom_types, lengths, angles)
-    plot_materials(the_coords, atom_types)
+    plot_materials(the_coords, atom_types, RESULTS_FOLDER)
