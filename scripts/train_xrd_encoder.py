@@ -7,7 +7,8 @@ import torch.optim as optim
 import numpy as np
 
 from cdvae.pl_modules.xrd_encoder import XRDEncoder
-
+from cdvae.pl_data.dataset import CrystXRDDataset
+from scripts.eval_utils import load_model
 
 class XRDTrainer:
     def __init__(self, data_dir, save_dir, model_path, batch_size, epochs, lr):
@@ -27,10 +28,32 @@ class XRDTrainer:
         self.optimizer = optim.Adam(self.enc_model.parameters(), lr=self.lr)
 
     def load_data(self):
-        pass
+        # train loader
+        data_path = self.data_dir
+        train_dataset = CrystXRDDataset(
+            data_path,
+            filename='train.csv',
+        )
+        self.train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=2,
+        )
+        # val loader
+        val_dataset = CrystXRDDataset(
+            data_path,
+            filename='val.csv',
+        )
+        self.val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=2,
+        )
 
     def load_teacher_model(self):
-        pass
+        self.teacher_model, _, _ = load_model(self.model_path)
 
     def create_enc_model(self):
         self.enc_model = XRDEncoder()
@@ -44,6 +67,8 @@ class XRDTrainer:
     
     def save(self):
         pass
+
+
 
 def main():
     # Training settings
@@ -64,14 +89,17 @@ def main():
     )
     parser.add_argument(
         '--model_path',
+        default='/home/tsaidi/Research/cdvae_xrd/hydra/singlerun/2024-02-17/perov',
         type=str,
     )
     parser.add_argument(
         '--data_dir',
+        default='/home/tsaidi/Research/cdvae_xrd/data/perov_5',
         type=str,
     )
     parser.add_argument(
         '--save_dir',
+        default='/home/tsaidi/Research/cdvae_xrd/outputs',
         type=str,
     )
     parser.add_argument(

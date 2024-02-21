@@ -6,6 +6,7 @@ from omegaconf import ValueNode
 from torch.utils.data import Dataset
 
 from torch_geometric.data import Data
+import os
 
 from cdvae.common.utils import PROJECT_ROOT
 from cdvae.common.data_utils import (
@@ -72,6 +73,76 @@ class CrystDataset(Dataset):
     def __repr__(self) -> str:
         return f"CrystDataset({self.name=}, {self.path=})"
 
+
+class CrystXRDDataset(Dataset):
+    def __init__(self, 
+                 data_path,
+                 filename,
+                 prop='heat_ref',
+                 niggli=True, 
+                 primitive=False,
+                 graph_method='crystalnn', 
+                 preprocess_workers=30,
+                 lattice_scale_method='scale_length',
+                 **kwargs
+        ):
+
+        super().__init__()
+        self.molecule_data_path = os.path.join(data_path, filename)
+        self.xrd_data_path = os.path.join(data_path, os.path.join('xrd',filename.replace('.csv', '.pt')))
+        print(self.molecule_data_path)
+        print(self.xrd_data_path)
+        self.prop = prop
+        self.niggli = niggli
+        self.primitive = primitive
+        self.graph_method = graph_method
+        self.lattice_scale_method = lattice_scale_method
+
+        self.cached_data = preprocess(
+            self.molecule_data_path,
+            preprocess_workers,
+            niggli=self.niggli,
+            primitive=self.primitive,
+            graph_method=self.graph_method,
+            prop_list=[prop])
+        
+        self.xrd_data = torch.load(self.xrd_data_path)
+
+        add_scaled_lattice_prop(self.cached_data, lattice_scale_method)
+        self.lattice_scaler = None
+        self.scaler = None
+
+    def __len__(self) -> int:
+        return len(self.cached_data)
+
+    def __getitem__(self, index):
+        data_dict = self.cached_data[index]
+
+        # scaler is set in DataModule set stage
+        prop = self.scaler.transform(data_dict[self.prop])
+        (frac_coords, atom_types, lengths, angles, edge_indices,
+         to_jimages, num_atoms) = data_dict['graph_arrays']
+
+        # atom_coords are fractional coordinates
+        # edge_index is incremented during batching
+        # https://pytorch-geometric.readthedocs.io/en/latest/notes/batching.html
+        data = Data(
+            frac_coords=torch.Tensor(frac_coords),
+            atom_types=torch.LongTensor(atom_types),
+            lengths=torch.Tensor(lengths).view(1, -1),
+            angles=torch.Tensor(angles).view(1, -1),
+            edge_index=torch.LongTensor(
+                edge_indices.T).contiguous(),  # shape (2, num_edges)
+            to_jimages=torch.LongTensor(to_jimages),
+            num_atoms=num_atoms,
+            num_bonds=edge_indices.shape[0],
+            num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
+            y=prop.view(1, -1),
+        )
+
+        # fetch xrd data
+        xrd_data = self.xrd_data[index]
+        return data, xrd_data
 
 class TensorCrystDataset(Dataset):
     def __init__(self, crystal_array_list, niggli, primitive,
