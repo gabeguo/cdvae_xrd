@@ -117,7 +117,7 @@ class XRDTrainer:
         return running_loss / len(self.val_loader)
     
     def save(self, state_dict):
-        torch.save(state_dict, os.path.join(self.data_dir, f'{self.save_file}.pt'))
+        torch.save(state_dict, os.path.join(self.model_path, f'{self.save_file}.pt'))
 
 
 
@@ -154,9 +154,9 @@ def main():
     parser.add_argument(
         '--lr',
         type=float,
-        default=1e-3,
+        default=1e-5,
         metavar='LR',
-        help='learning rate (default: 0.01)'
+        help='learning rate'
     )
     args = parser.parse_args()
     trainer = XRDTrainer(**vars(args))
