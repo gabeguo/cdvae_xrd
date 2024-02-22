@@ -90,8 +90,6 @@ class CrystXRDDataset(Dataset):
         super().__init__()
         self.molecule_data_path = os.path.join(data_path, filename)
         self.xrd_data_path = os.path.join(data_path, os.path.join('xrd',filename.replace('.csv', '.pt')))
-        print(self.molecule_data_path)
-        print(self.xrd_data_path)
         self.prop = prop
         self.niggli = niggli
         self.primitive = primitive

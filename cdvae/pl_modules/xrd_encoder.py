@@ -3,7 +3,7 @@ from torch import nn
 import numpy as np
 
 class XRDEncoder(nn.Module):
-    def __init__(self, num_channels=512):
+    def __init__(self, num_channels=1):
         super(XRDEncoder, self).__init__()
 
         self.num_channels = num_channels
@@ -26,7 +26,9 @@ class XRDEncoder(nn.Module):
                 ))
                 curr_num_channels = curr_num_channels // 2
         self.layers = nn.Sequential(*layer_list)
+        self.linear = nn.Linear(in_features=64, out_features=256)
 
     def forward(self, x):
         result = self.layers(x)
+        result = self.linear(result.reshape(x.size(0), -1))
         return result

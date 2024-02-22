@@ -11,10 +11,8 @@ import os
 
 def create_xrd_tensor(args, pattern):
     peak_data = torch.zeros(args.xrd_vector_dim)
-
     peak_locations = pattern.x.tolist()
     peak_values = pattern.y.tolist()
-
     for i2 in range(len(peak_locations)):
         theta = peak_locations[i2]
         height = peak_values[i2] / 100
