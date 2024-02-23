@@ -69,6 +69,22 @@ class XRDTrainer:
             shuffle=False,
             num_workers=2,
         )
+        # test loader
+        test_dataset = CrystXRDDataset(
+            data_path,
+            filename='test.csv',
+        )
+        scaler = get_scaler_from_data_list(
+            test_dataset.cached_data,
+            key=test_dataset.prop
+        )
+        test_dataset.scaler = scaler
+        self.test_loader = DataLoader(
+            test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=2,
+        )
 
     def load_teacher_model(self):
         self.teacher_model, _, _ = load_model(Path(self.model_path))
@@ -81,7 +97,7 @@ class XRDTrainer:
         val_loss_min = float('inf')
         for epoch in range(self.epochs):
             train_loss = self.train_epoch()
-            val_loss = self.eval()
+            val_loss, _ = self.eval(the_loader=self.val_loader)
             if val_loss < val_loss_min:
                 print(f'Epoch {epoch}: Validation loss decreased ({val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
                 self.save(self.enc_model.state_dict)
@@ -106,18 +122,22 @@ class XRDTrainer:
             self.optimizer.step()
         return running_loss / len(self.train_loader)
 
-    def eval(self):
+    def eval(self, the_loader):
         self.enc_model.eval()
         running_loss = 0.0
+        all_embeddings = list()
         with torch.no_grad():
-            for (data, xrd) in self.val_loader:
+            for (data, xrd) in the_loader:
                 data = data.to(self.device)
                 xrd = xrd.to(self.device).unsqueeze(1)
                 pred_embedding = self.enc_model(xrd)
+                all_embeddings.append(pred_embedding)
                 teacher_embedding_mu, _, _ = self.teacher_model.encode(data)
                 loss = F.mse_loss(pred_embedding, teacher_embedding_mu)
                 running_loss += loss.item()
-        return running_loss / len(self.val_loader)
+        all_embeddings = torch.cat(all_embeddings, dim=0)
+        assert all_embeddings.shape == (len(the_loader), 512)
+        return running_loss / len(the_loader), all_embeddings
     
     def save(self, state_dict):
         torch.save(state_dict, os.path.join(self.model_path, f'{self.save_file}.pt'))
@@ -171,6 +191,9 @@ def main():
 
     trainer = XRDTrainer(**vars(args))
     trainer.train()
+
+    _, embeddings = trainer.eval(trainer.test_loader)
+    torch.save(embeddings, os.path.join(trainer.model_path, f'xrd_test_recon.pt'))
 
 if __name__ == "__main__":
     main()
