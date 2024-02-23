@@ -15,6 +15,8 @@ from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
 from scripts.eval_utils import load_model
 
+import wandb
+
 class XRDTrainer:
     def __init__(self, data_dir, save_file, model_path, batch_size, epochs, lr):
         
@@ -78,7 +80,7 @@ class XRDTrainer:
     def train(self):
         val_loss_min = float('inf')
         for epoch in range(self.epochs):
-            self.train_epoch()
+            train_loss = self.train_epoch()
             val_loss = self.eval()
             if val_loss < val_loss_min:
                 print(f'Epoch {epoch}: Validation loss decreased ({val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
@@ -86,6 +88,7 @@ class XRDTrainer:
                 val_loss_min = val_loss
             else:
                 print(f'Epoch {epoch}: Validation loss: {val_loss:.6f}')
+            wandb.log({"train_loss": train_loss, "val_loss": val_loss, "val_loss_min": val_loss_min})
 
     def train_epoch(self):
         self.enc_model.train()
@@ -159,6 +162,13 @@ def main():
         help='learning rate'
     )
     args = parser.parse_args()
+
+    run = wandb.init(
+        # Set the project where this run will be logged
+        project="xrd_latent_regression",
+        config=vars(args)
+    )
+
     trainer = XRDTrainer(**vars(args))
     trainer.train()
 
