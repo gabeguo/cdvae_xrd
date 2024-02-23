@@ -101,7 +101,7 @@ class XRDTrainer:
             val_loss, _ = self.eval(the_loader=self.val_loader)
             if val_loss < val_loss_min:
                 print(f'Epoch {epoch}: Validation loss decreased ({val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-                self.save(self.enc_model.state_dict)
+                self.save(self.enc_model.state_dict())
                 val_loss_min = val_loss
             else:
                 print(f'Epoch {epoch}: Validation loss: {val_loss:.6f}')
