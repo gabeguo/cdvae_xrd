@@ -89,9 +89,8 @@ class CrystXRDDataset(Dataset):
                  lattice_scale_method='scale_length',
                  horizontal_noise_range=(1e-3, 1e-2),
                  vertical_noise=1e-2,
-                 xrd_dim=512
-                 **kwargs
-        ):
+                 xrd_dim=512,
+                 **kwargs):
 
         super().__init__()
         self.molecule_data_path = os.path.join(data_path, filename)

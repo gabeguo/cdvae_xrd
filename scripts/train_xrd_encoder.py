@@ -88,7 +88,8 @@ class XRDTrainer:
 
     def load_teacher_model(self):
         self.teacher_model, _, _ = load_model(Path(self.model_path))
-
+        self.teacher_model.eval()
+        
     def create_enc_model(self):
         self.enc_model = XRDEncoder()
         self.enc_model.to(self.device)
@@ -116,7 +117,7 @@ class XRDTrainer:
             pred_embedding = self.enc_model(xrd)
             with torch.no_grad():
                 teacher_embedding_mu, _, _ = self.teacher_model.encode(data)
-            loss = F.mse_loss(pred_embedding, teacher_embedding_mu)
+            loss = F.l1_loss(pred_embedding, teacher_embedding_mu)
             loss.backward()
             running_loss += loss.item()
             self.optimizer.step()
@@ -133,7 +134,7 @@ class XRDTrainer:
                 pred_embedding = self.enc_model(xrd)
                 all_embeddings.append(pred_embedding)
                 teacher_embedding_mu, _, _ = self.teacher_model.encode(data)
-                loss = F.mse_loss(pred_embedding, teacher_embedding_mu)
+                loss = F.l1_loss(pred_embedding, teacher_embedding_mu)
                 running_loss += loss.item()
         all_embeddings = torch.cat(all_embeddings, dim=0)
         assert all_embeddings.shape == (len(the_loader), 512)
