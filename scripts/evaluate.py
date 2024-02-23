@@ -33,6 +33,7 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
     if xrd:
         xrd_encoder = XRDEncoder().to('cuda' if torch.cuda.is_available() else 'cpu')
         xrd_encoder.load_state_dict(torch.load(os.path.join(model_path, 'xrd_enc.pt')))
+        all_noised_xrds = list()
     
     for idx, batch in enumerate(loader):
         if xrd:
@@ -48,6 +49,7 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
         # only sample one z, multiple evals for stoichaticity in langevin dynamics
         if xrd:
             z = xrd_encoder(xrd_data.cuda().unsqueeze(1))
+            all_noised_xrds.append(xrd_data)
         else:
             _, _, z = model.encode(batch)
 
@@ -92,9 +94,16 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
         all_atom_types_stack = torch.cat(all_atom_types_stack, dim=2)
     input_data_batch = Batch.from_data_list(input_data_list)
 
-    return (
+    ret_val = [
         frac_coords, num_atoms, atom_types, lengths, angles,
-        all_frac_coords_stack, all_atom_types_stack, input_data_batch)
+        all_frac_coords_stack, all_atom_types_stack, input_data_batch]
+    if xrd:
+        all_noised_xrds = torch.cat(all_noised_xrds, dim=0)
+        assert all_noised_xrds.shape == (len(loader.dataset), 256)
+        ret_val.append(all_noised_xrds)
+    else:
+        ret_val.append(None)
+    return ret_val
 
 
 def generation(model, ld_kwargs, num_batches_to_sample, num_samples_per_z,
@@ -223,7 +232,7 @@ def main(args):
         print('Evaluate model on the reconstruction task.')
         start_time = time.time()
         (frac_coords, num_atoms, atom_types, lengths, angles,
-         all_frac_coords_stack, all_atom_types_stack, input_data_batch) = reconstructon(
+         all_frac_coords_stack, all_atom_types_stack, input_data_batch, noised_xrds) = reconstructon(
             test_loader, model, ld_kwargs, args.num_evals,
             args.force_num_atoms, args.force_atom_types, args.down_sample_traj_step, args.xrd, args.model_path)
 
@@ -242,7 +251,8 @@ def main(args):
             'angles': angles,
             'all_frac_coords_stack': all_frac_coords_stack,
             'all_atom_types_stack': all_atom_types_stack,
-            'time': time.time() - start_time
+            'time': time.time() - start_time,
+            'xrds': noised_xrds
         }, model_path / recon_out_name)
 
     if 'gen' in args.tasks:
