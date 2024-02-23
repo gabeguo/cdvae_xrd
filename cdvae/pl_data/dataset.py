@@ -89,6 +89,7 @@ class CrystXRDDataset(Dataset):
                  lattice_scale_method='scale_length',
                  horizontal_noise_range=(1e-3, 1e-2),
                  vertical_noise=1e-2,
+                 xrd_dim=512
                  **kwargs
         ):
 
@@ -100,6 +101,8 @@ class CrystXRDDataset(Dataset):
         self.primitive = primitive
         self.graph_method = graph_method
         self.lattice_scale_method = lattice_scale_method
+        
+        self.xrd_dim = xrd_dim
 
         assert (horizontal_noise_range is None) or (len(horizontal_noise_range) == 2 and horizontal_noise_range[0] <= horizontal_noise_range[1])
         self.horizontal_noise_range = horizontal_noise_range
