@@ -5,6 +5,9 @@ import pandas as pd
 from omegaconf import ValueNode
 from torch.utils.data import Dataset
 
+from scipy.ndimage import gaussian_filter1d
+import numpy as np
+
 from torch_geometric.data import Data
 import os
 
@@ -84,6 +87,8 @@ class CrystXRDDataset(Dataset):
                  graph_method='crystalnn', 
                  preprocess_workers=30,
                  lattice_scale_method='scale_length',
+                 horizontal_noise_range=(1e-3, 1e-2),
+                 vertical_noise=1e-2,
                  **kwargs
         ):
 
@@ -95,6 +100,10 @@ class CrystXRDDataset(Dataset):
         self.primitive = primitive
         self.graph_method = graph_method
         self.lattice_scale_method = lattice_scale_method
+
+        assert (horizontal_noise_range is None) or (len(horizontal_noise_range) == 2 and horizontal_noise_range[0] <= horizontal_noise_range[1])
+        self.horizontal_noise_range = horizontal_noise_range
+        self.vertical_noise = vertical_noise
 
         self.cached_data = preprocess(
             self.molecule_data_path,
@@ -140,8 +149,34 @@ class CrystXRDDataset(Dataset):
 
         # fetch xrd data
         xrd_data = self.xrd_data[index]
+        # add peak broadening
+        if (self.horizontal_noise_range is not None) and (self.vertical_noise is not None):
+            xrd_data = self.augment_xrdStrip(xrd_data)
         return data, xrd_data
 
+    def augment_xrdStrip(self, curr_xrdStrip):
+        """
+        Augments curr_xrdStrip via:
+        -> Adding Gaussian peak broadening (horizontal)
+        -> Adding small Gaussian perturbations to peaks (vertical)
+        """
+        xrd = curr_xrdStrip.numpy()
+        # Peak broadening
+        filtered = gaussian_filter1d(xrd,
+                    sigma=np.random.uniform(
+                        low=self.xrd_dim * self.horizontal_noise_range[0], 
+                        high=self.xrd_dim * self.horizontal_noise_range[1]
+                    ), 
+                    mode='constant', cval=0)
+        filtered = filtered / np.max(filtered)
+        filtered = torch.from_numpy(filtered)
+        assert filtered.shape == curr_xrdStrip.shape
+        # Perturbation
+        perturbed = filtered + torch.normal(mean=0, std=self.vertical_noise, size=filtered.size())
+        perturbed = torch.maximum(perturbed, torch.zeros_like(perturbed))
+        perturbed = torch.minimum(perturbed, torch.ones_like(perturbed)) # band-pass filter
+        return perturbed
+        
 class TensorCrystDataset(Dataset):
     def __init__(self, crystal_array_list, niggli, primitive,
                  graph_method, preprocess_workers,
