@@ -137,7 +137,7 @@ class XRDTrainer:
                 loss = F.l1_loss(pred_embedding, teacher_embedding_mu)
                 running_loss += loss.item()
         all_embeddings = torch.cat(all_embeddings, dim=0)
-        assert all_embeddings.shape == (len(the_loader), 512)
+        assert all_embeddings.shape == (len(the_loader.dataset), 256)
         return running_loss / len(the_loader), all_embeddings
     
     def save(self, state_dict):

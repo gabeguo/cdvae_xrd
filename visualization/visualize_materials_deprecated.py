@@ -194,7 +194,7 @@ def plot_material_single(curr_coords, curr_atom_types, idx=0):
     return
 
 if __name__ == "__main__":
-    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/carbon/eval_recon.pt'
+    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_recon.pt'
 
     results = torch.load(filepath)
 

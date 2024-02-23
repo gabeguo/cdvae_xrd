@@ -1,9 +1,9 @@
 python train_xrd_encoder.py \
-    --epochs 50 \
+    --epochs 200 \
     --batch_size 256 \
     --model_path /home/gabeguo/hydra/singlerun/2024-02-17/perov \
     --data_dir /home/gabeguo/cdvae/data/perov_5 \
-    --lr 1e-5
+    --lr 1e-4
 
 # python train_xrd_encoder.py \
 #     --epochs 50 \

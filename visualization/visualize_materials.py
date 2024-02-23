@@ -94,7 +94,7 @@ def ms(center, radius, n_points=20):
     Z = radius * np.cos(v) + z
     return (X, Y, Z)
 
-def plot_materials(the_coords, atom_types, output_dir, num_materials=5):
+def plot_materials(the_coords, atom_types, output_dir, num_materials=10):
     for i in range(min(len(the_coords), num_materials)):
         curr_coords = the_coords[i]
         curr_atom_types = atom_types[i]
@@ -167,7 +167,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
     return
 
 if __name__ == "__main__":
-    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/carbon/eval_recon.pt'
+    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_gen.pt'
 
     results = torch.load(filepath)
 

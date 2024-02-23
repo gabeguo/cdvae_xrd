@@ -42,6 +42,7 @@ class BaseModule(pl.LightningModule):
             self.hparams.optim.lr_scheduler, optimizer=opt
         )
         return {"optimizer": opt, "lr_scheduler": scheduler, "monitor": "train_loss"}
+        # TODO: monitor val_loss, strict=False
 
 
 class CrystGNN_Supervise(BaseModule):
