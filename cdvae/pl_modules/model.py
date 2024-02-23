@@ -308,9 +308,12 @@ class CDVAE(BaseModule):
         samples = self.langevin_dynamics(z, ld_kwargs)
         return samples
 
-    def forward(self, batch, teacher_forcing, training):
+    def forward(self, batch, teacher_forcing, training, z=None):
         # hacky way to resolve the NaN issue. Will need more careful debugging later.
-        mu, log_var, z = self.encode(batch)
+        overwritten = False
+        if z is not None:
+            overwritten = True
+            mu, log_var, z = self.encode(batch)
 
         (pred_num_atoms, pred_lengths_and_angles, pred_lengths, pred_angles,
          pred_composition_per_atom) = self.decode_stats(
@@ -361,8 +364,10 @@ class CDVAE(BaseModule):
             pred_cart_coord_diff, noisy_frac_coords, used_sigmas_per_atom, batch)
         type_loss = self.type_loss(pred_atom_types, batch.atom_types,
                                    used_type_sigmas_per_atom, batch)
-
-        kld_loss = self.kld_loss(mu, log_var)
+        if not overwritten:
+            kld_loss = self.kld_loss(mu, log_var)
+        else:
+            kld_loss = 0
 
         if self.hparams.predict_property:
             property_loss = self.property_loss(z, batch)

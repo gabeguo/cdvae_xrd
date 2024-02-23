@@ -1,18 +1,23 @@
 import time
 import argparse
 import torch
+import os
 
 from tqdm import tqdm
 from torch.optim import Adam
 from pathlib import Path
 from types import SimpleNamespace
 from torch_geometric.data import Batch
+from torch_geometric.data import DataLoader
+
 
 from eval_utils import load_model
-
+from cdvae.pl_modules.xrd_encoder import XRDEncoder
+from cdvae.pl_data.dataset import CrystXRDDataset
+from cdvae.common.data_utils import get_scaler_from_data_list
 
 def reconstructon(loader, model, ld_kwargs, num_evals,
-                  force_num_atoms=False, force_atom_types=False, down_sample_traj_step=1):
+                  force_num_atoms=False, force_atom_types=False, down_sample_traj_step=1, xrd=False, model_path=None):
     """
     reconstruct the crystals in <loader>.
     """
@@ -25,7 +30,13 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
     angles = []
     input_data_list = []
 
+    if xrd:
+        xrd_encoder = XRDEncoder().to('cuda' if torch.cuda.is_available() else 'cpu')
+        xrd_encoder.load_state_dict(torch.load(os.path.join(model_path, 'xrd_enc.pt')))
+    
     for idx, batch in enumerate(loader):
+        if xrd:
+            batch, xrd_data = batch 
         if torch.cuda.is_available():
             batch.cuda()
         print(f'batch {idx} in {len(loader)}')
@@ -35,7 +46,10 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
         batch_lengths, batch_angles = [], []
 
         # only sample one z, multiple evals for stoichaticity in langevin dynamics
-        _, _, z = model.encode(batch)
+        if xrd:
+            z = xrd_encoder(xrd_data.cuda().unsqueeze(1))
+        else:
+            _, _, z = model.encode(batch)
 
         for eval_idx in range(num_evals):
             gt_num_atoms = batch.num_atoms if force_num_atoms else None
@@ -183,7 +197,25 @@ def main(args):
                                 min_sigma=args.min_sigma,
                                 save_traj=args.save_traj,
                                 disable_bar=args.disable_bar)
-
+    # overwrite
+    if args.xrd:
+        # test loader
+        test_dataset = CrystXRDDataset(
+            args.data_dir,
+            filename='test.csv',
+        )
+        scaler = get_scaler_from_data_list(
+            test_dataset.cached_data,
+            key=test_dataset.prop
+        )
+        test_dataset.scaler = scaler
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=2,
+        ) 
+    
     if torch.cuda.is_available():
         model.to('cuda')
 
@@ -193,7 +225,7 @@ def main(args):
         (frac_coords, num_atoms, atom_types, lengths, angles,
          all_frac_coords_stack, all_atom_types_stack, input_data_batch) = reconstructon(
             test_loader, model, ld_kwargs, args.num_evals,
-            args.force_num_atoms, args.force_atom_types, args.down_sample_traj_step)
+            args.force_num_atoms, args.force_atom_types, args.down_sample_traj_step, args.xrd, args.model_path)
 
         if args.label == '':
             recon_out_name = 'eval_recon.pt'
@@ -260,6 +292,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', required=True)
+    parser.add_argument('--xrd', default=False, type=bool)
+    parser.add_argument('--data_dir', default='data', type=str)
     parser.add_argument('--tasks', nargs='+', default=['recon', 'gen', 'opt'])
     parser.add_argument('--n_step_each', default=100, type=int)
     parser.add_argument('--step_lr', default=1e-4, type=float)
