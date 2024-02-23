@@ -149,7 +149,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
 
     # Customize layout
     fig.update_layout(
-        title='moo',
+        title=os.path.split(output_dir)[-1],
         scene=dict(
             xaxis_title='X (Å)',
             yaxis_title='Y (Å)',
@@ -167,7 +167,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
     return
 
 if __name__ == "__main__":
-    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_gen.pt'
+    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_recon.pt'
 
     results = torch.load(filepath)
 
@@ -182,13 +182,19 @@ if __name__ == "__main__":
     print('lengths', results['lengths'].shape)
     print('angles', results['angles'].shape)
 
-    frac_coords = results['frac_coords'].squeeze()
-    num_atoms = results['num_atoms'].squeeze()
-    atom_types = results['atom_types'].squeeze()
-    lengths = results['lengths'].squeeze()
-    angles = results['angles'].squeeze()
+    for the_dataset, the_name in zip([results, results['input_data_batch']], 
+                                     ['pred', 'gt']):
 
-    os.makedirs(RESULTS_FOLDER, exist_ok=True)
+        frac_coords = the_dataset['frac_coords'].squeeze()
+        num_atoms = the_dataset['num_atoms'].squeeze()
+        atom_types = the_dataset['atom_types'].squeeze()
+        lengths = the_dataset['lengths'].squeeze()
+        angles = the_dataset['angles'].squeeze()
 
-    the_coords, atom_types = create_materials(frac_coords, num_atoms, atom_types, lengths, angles)
-    plot_materials(the_coords, atom_types, RESULTS_FOLDER)
+        curr_folder = os.path.join(RESULTS_FOLDER, the_name)
+
+        os.makedirs(curr_folder, exist_ok=True)
+
+        the_coords, atom_types = create_materials(frac_coords, num_atoms, atom_types, lengths, angles)
+        plot_materials(the_coords, atom_types, curr_folder)
+
