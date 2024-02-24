@@ -49,6 +49,7 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
         # only sample one z, multiple evals for stoichaticity in langevin dynamics
         if xrd:
             z = xrd_encoder(xrd_data.cuda().unsqueeze(1))
+            assert xrd_data.shape[1] == 512
             all_noised_xrds.append(xrd_data)
         else:
             _, _, z = model.encode(batch)
