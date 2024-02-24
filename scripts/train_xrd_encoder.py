@@ -17,6 +17,12 @@ from scripts.eval_utils import load_model
 
 import wandb
 
+dataset_to_prop = {
+    'perov_5': 'heat_ref',
+    'mp_20': 'formation_energy_per_atom',
+    'carbon_24': 'energy_per_atom',
+}
+
 class XRDTrainer:
     def __init__(self, data_dir, save_file, model_path, batch_size, epochs, lr):
         
@@ -35,18 +41,17 @@ class XRDTrainer:
         self.optimizer = optim.Adam(self.enc_model.parameters(), lr=self.lr)
 
     def load_data(self):
+        prop = dataset_to_prop[self.data_dir.split('/')[-1]]
         # train loader
         data_path = self.data_dir
         train_dataset = CrystXRDDataset(
             data_path,
             filename='train.csv',
+            prop=prop,
         )
-        scaler = get_scaler_from_data_list(
-            train_dataset.cached_data,
-            key=train_dataset.prop
-        )
-        train_dataset.scaler = scaler
-        
+        train_dataset.lattice_scaler = torch.load(
+            Path(self.model_path) / 'lattice_scaler.pt')
+        train_dataset.scaler = torch.load(Path(self.model_path) / 'prop_scaler.pt')
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=self.batch_size,
@@ -57,12 +62,11 @@ class XRDTrainer:
         val_dataset = CrystXRDDataset(
             data_path,
             filename='val.csv',
+            prop=prop,
         )
-        scaler = get_scaler_from_data_list(
-            val_dataset.cached_data,
-            key=val_dataset.prop
-        )
-        val_dataset.scaler = scaler
+        val_dataset.lattice_scaler = torch.load(
+            Path(self.model_path) / 'lattice_scaler.pt')
+        val_dataset.scaler = torch.load(Path(self.model_path) / 'prop_scaler.pt')
         self.val_loader = DataLoader(
             val_dataset,
             batch_size=self.batch_size,
@@ -73,12 +77,11 @@ class XRDTrainer:
         test_dataset = CrystXRDDataset(
             data_path,
             filename='test.csv',
+            prop=prop,
         )
-        scaler = get_scaler_from_data_list(
-            test_dataset.cached_data,
-            key=test_dataset.prop
-        )
-        test_dataset.scaler = scaler
+        test_dataset.lattice_scaler = torch.load(
+            Path(self.model_path) / 'lattice_scaler.pt')
+        test_dataset.scaler = torch.load(Path(self.model_path) / 'prop_scaler.pt')
         self.test_loader = DataLoader(
             test_dataset,
             batch_size=self.batch_size,

@@ -208,16 +208,20 @@ def main(args):
                                 disable_bar=args.disable_bar)
     # overwrite
     if args.xrd:
+        dataset_to_prop = {
+            'perov_5': 'heat_ref',
+            'mp_20': 'formation_energy_per_atom',
+            'carbon_24': 'energy_per_atom'
+        }
         # test loader
         test_dataset = CrystXRDDataset(
             args.data_dir,
             filename='test.csv',
+            prop=dataset_to_prop[args.data_dir.split('/')[-1]]
         )
-        scaler = get_scaler_from_data_list(
-            test_dataset.cached_data,
-            key=test_dataset.prop
-        )
-        test_dataset.scaler = scaler
+        test_dataset.lattice_scaler = torch.load(
+            Path(model_path) / 'lattice_scaler.pt')
+        test_dataset.scaler = torch.load(Path(model_path) / 'prop_scaler.pt')
         test_loader = DataLoader(
             test_dataset,
             batch_size=args.batch_size,
@@ -302,7 +306,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', required=True)
-    parser.add_argument('--xrd', default=False, type=bool)
+    parser.add_argument('--xrd', action='store_true')
     parser.add_argument('--data_dir', default='data', type=str)
     parser.add_argument('--tasks', nargs='+', default=['recon', 'gen', 'opt'])
     parser.add_argument('--n_step_each', default=100, type=int)
