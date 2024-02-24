@@ -103,6 +103,16 @@ def plot_materials(the_coords, atom_types, output_dir, num_materials=10):
     
     return
 
+def plot_xrds(xrds, output_dir, num_materials=10):
+    for i in range(min(num_materials, xrds.shape[0])):
+        curr_xrd = xrds[i]
+        assert curr_xrd.shape == (512,)
+        thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
+        plt.plot(thetas, curr_xrd)
+        plt.savefig(os.path.join(output_dir, f'dummy{i}.png'))
+        plt.close()
+    return
+
 def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
     print(curr_coords)
     print(curr_atom_types)
@@ -167,7 +177,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
     return
 
 if __name__ == "__main__":
-    filepath = '/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_recon.pt'
+    filepath = '/home/gabeguo/hydra/singlerun/2024-02-17/perov/eval_recon_xrd.pt' #'/home/gabeguo/hydra/singlerun/2024-02-17/perov/eval_recon_xrd.pt'
 
     results = torch.load(filepath)
 
@@ -181,6 +191,8 @@ if __name__ == "__main__":
     print('atom_types', results['atom_types'].shape)
     print('lengths', results['lengths'].shape)
     print('angles', results['angles'].shape)
+
+    print('xrds', results['xrds'].shape)
 
     for the_dataset, the_name in zip([results, results['input_data_batch']], 
                                      ['pred', 'gt']):
@@ -197,4 +209,10 @@ if __name__ == "__main__":
 
         the_coords, atom_types = create_materials(frac_coords, num_atoms, atom_types, lengths, angles)
         plot_materials(the_coords, atom_types, curr_folder)
+    
+    xrds = results['xrds'].squeeze().numpy()
+    xrd_graph_folder = os.path.join(RESULTS_FOLDER, 'xrds')
+    os.makedirs(xrd_graph_folder, exist_ok=True)
+    plot_xrds(xrds, xrd_graph_folder)
+
 
