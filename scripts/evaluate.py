@@ -99,7 +99,7 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
         all_frac_coords_stack, all_atom_types_stack, input_data_batch]
     if xrd:
         all_noised_xrds = torch.cat(all_noised_xrds, dim=0)
-        assert all_noised_xrds.shape == (len(loader.dataset), 256)
+        assert all_noised_xrds.shape == (len(loader.dataset), 512)
         ret_val.append(all_noised_xrds)
     else:
         ret_val.append(None)
