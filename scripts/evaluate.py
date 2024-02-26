@@ -218,7 +218,7 @@ def main(args):
         test_dataset = CrystXRDDataset(
             args.data_dir,
             filename='test.csv',
-            prop=dataset_to_prop[args.data_dir.split('/')[-1]]
+            prop=dataset_to_prop[args.model_path.split('/')[-1]]
         )
         test_dataset.lattice_scaler = torch.load(
             Path(model_path) / 'lattice_scaler.pt')
@@ -326,4 +326,5 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    print('starting eval', args)
     main(args)
