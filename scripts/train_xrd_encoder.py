@@ -10,7 +10,7 @@ from pathlib import Path
 
 from torch_geometric.data import DataLoader
 
-from cdvae.pl_modules.xrd_encoder import XRDEncoder
+from cdvae.pl_modules.xrd import XRDEncoder
 from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
 from scripts.eval_utils import load_model
@@ -181,7 +181,7 @@ def main():
     parser.add_argument(
         '--lr',
         type=float,
-        default=1e-5,
+        default=1e-4,
         metavar='LR',
         help='learning rate'
     )

@@ -12,7 +12,7 @@ from torch_geometric.data import DataLoader
 
 
 from eval_utils import load_model
-from cdvae.pl_modules.xrd_encoder import XRDEncoder
+from cdvae.pl_modules.xrd import XRDEncoder
 from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
 
