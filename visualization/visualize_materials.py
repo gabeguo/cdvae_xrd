@@ -6,9 +6,12 @@ from tqdm import tqdm
 from pymatgen.core.periodic_table import Element
 from pymatgen.core.structure import Structure
 from pymatgen.core.lattice import Lattice
+from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
+from scripts.gen_xrd import create_xrd_tensor
 from scripts.eval_utils import get_crystals_list
 import warnings
 import os
+import argparse
 
 # Thanks ChatGPT!
 # Thanks https://www.umass.edu/microbio/chime/pe_beta/pe/shared/cpk-rgb.htm
@@ -44,13 +47,21 @@ CPK_COLORS = {
 }
 DEFAULT_COLOR = [255, 20, 147] # Default
 DEFAULT_RADIUS = 0.1
-RESULTS_FOLDER = 'dummy_vis'
 
-def create_materials(frac_coords, num_atoms, atom_types, lengths, angles):
+def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=False):
+    # wavelength
+    curr_wavelength = WAVELENGTHS[args.wave_source]
+    # Create the XRD calculator
+    xrd_calc = XRDCalculator(wavelength=curr_wavelength)
+    # get the crystals
     crystals_list = get_crystals_list(frac_coords=frac_coords, atom_types=atom_types, lengths=lengths, angles=angles, num_atoms=num_atoms)
+    # ret vals
     all_coords = list()
     all_atom_types = list()
-    for curr_crystal in tqdm(crystals_list):
+    all_xrds = list()
+    # loop through and process the crystals
+    for i in tqdm(range(min(args.num_materials, len(crystals_list)))):
+        curr_crystal = crystals_list[i]
         curr_structure = Structure(
             lattice=Lattice.from_parameters(
                 *(curr_crystal['lengths'].tolist() + curr_crystal['angles'].tolist())),
@@ -62,14 +73,26 @@ def create_materials(frac_coords, num_atoms, atom_types, lengths, angles):
         for site in curr_structure:
             curr_coords.append([site.x, site.y, site.z])
             curr_atom_types.append(Element(site.species_string))
+
+        if create_xrd:
+            # Calculate the XRD pattern
+            pattern = xrd_calc.get_pattern(curr_structure)
+            # Create the XRD tensor
+            xrd_tensor = create_xrd_tensor(args, pattern)
+            all_xrds.append(xrd_tensor)
         
         all_coords.append(np.array(curr_coords))
         all_atom_types.append(curr_atom_types)
     
     assert len(all_coords) == len(all_atom_types)
-    assert len(all_coords) == len(num_atoms)
+    assert len(all_coords) == min(len(num_atoms), args.num_materials)
 
-    return all_coords, all_atom_types
+    if create_xrd:
+        assert len(all_coords) == len(all_xrds)
+        all_xrds = torch.stack(all_xrds, dim=0).numpy()
+        assert all_xrds.shape == (len(all_coords), 512)
+
+    return all_coords, all_atom_types, all_xrds
 
 # Thanks ChatGPT!
 # Function to generate sphere coordinates
@@ -94,8 +117,8 @@ def ms(center, radius, n_points=20):
     Z = radius * np.cos(v) + z
     return (X, Y, Z)
 
-def plot_materials(the_coords, atom_types, output_dir, num_materials=10):
-    for i in range(min(len(the_coords), num_materials)):
+def plot_materials(args, the_coords, atom_types, output_dir):
+    for i in range(min(len(the_coords), args.num_materials)):
         curr_coords = the_coords[i]
         curr_atom_types = atom_types[i]
 
@@ -103,13 +126,13 @@ def plot_materials(the_coords, atom_types, output_dir, num_materials=10):
     
     return
 
-def plot_xrds(xrds, output_dir, num_materials=10):
-    for i in range(min(num_materials, xrds.shape[0])):
+def plot_xrds(args, xrds, output_dir):
+    for i in range(min(args.num_materials, xrds.shape[0])):
         curr_xrd = xrds[i]
         assert curr_xrd.shape == (512,)
         thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
         plt.plot(thetas, curr_xrd)
-        plt.savefig(os.path.join(output_dir, f'dummy{i}.png'))
+        plt.savefig(os.path.join(output_dir, f'material{i}.png'))
         plt.close()
     return
 
@@ -172,14 +195,30 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
 
     print('moo')
 
-    fig.write_image(os.path.join(output_dir, f'dummy{idx}.png'))
+    fig.write_image(os.path.join(output_dir, f'material{idx}.png'))
 
     return
 
 if __name__ == "__main__":
-    filepath = '/home/gabeguo/hydra/singlerun/2024-02-17/perov/eval_recon_xrd.pt' #'/home/gabeguo/hydra/singlerun/2024-02-17/perov/eval_recon_xrd.pt'
+    parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
+    parser.add_argument('--filepath', type=str, help='the file with the predictions from evaluate.py',
+                        default='/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_recon_xrd.pt')
+    parser.add_argument('--results_folder', type=str, help='where to save the visualizations',
+                        default='material_vis')
+    parser.add_argument('--xrd_vector_dim', type=int, help='what dimension are the xrds? (should be 512)',
+                        default=512)
+    parser.add_argument('--min_theta', type=int,
+                        default=0)
+    parser.add_argument('--max_theta', type=int, 
+                        default=180)
+    parser.add_argument('--num_materials', type=int, help='how many materials to visualize?',
+                        default=10)
+    parser.add_argument('--wave_source', type=str, help='What is the wave source?',
+                        default='CuKa')
 
-    results = torch.load(filepath)
+    args = parser.parse_args()
+
+    results = torch.load(args.filepath)
 
     print(len(results))
 
@@ -192,10 +231,12 @@ if __name__ == "__main__":
     print('lengths', results['lengths'].shape)
     print('angles', results['angles'].shape)
 
-    print('xrds', results['xrds'].shape)
+    print('xrds', results['xrds'])
 
     for the_dataset, the_name in zip([results, results['input_data_batch']], 
                                      ['pred', 'gt']):
+
+        is_pred = 'pred' in the_name
 
         frac_coords = the_dataset['frac_coords'].squeeze()
         num_atoms = the_dataset['num_atoms'].squeeze()
@@ -203,16 +244,21 @@ if __name__ == "__main__":
         lengths = the_dataset['lengths'].squeeze()
         angles = the_dataset['angles'].squeeze()
 
-        curr_folder = os.path.join(RESULTS_FOLDER, the_name)
+        curr_folder = os.path.join(args.results_folder, the_name)
 
         os.makedirs(curr_folder, exist_ok=True)
 
-        the_coords, atom_types = create_materials(frac_coords, num_atoms, atom_types, lengths, angles)
-        plot_materials(the_coords, atom_types, curr_folder)
+        the_coords, atom_types, generated_xrds = create_materials(args, 
+                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=is_pred)
+        plot_materials(args, the_coords, atom_types, curr_folder)
+        if is_pred:
+            pred_xrd_folder = os.path.join(args.results_folder, 'pred_xrds')
+            os.makedirs(pred_xrd_folder, exist_ok=True)
+            plot_xrds(args, generated_xrds, pred_xrd_folder)
     
     xrds = results['xrds'].squeeze().numpy()
-    xrd_graph_folder = os.path.join(RESULTS_FOLDER, 'xrds')
+    xrd_graph_folder = os.path.join(args.results_folder, 'xrds')
     os.makedirs(xrd_graph_folder, exist_ok=True)
-    plot_xrds(xrds, xrd_graph_folder)
+    plot_xrds(args, xrds, xrd_graph_folder)
 
 
