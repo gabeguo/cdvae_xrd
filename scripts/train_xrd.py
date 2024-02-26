@@ -10,7 +10,7 @@ from pathlib import Path
 
 from torch_geometric.data import DataLoader
 
-from cdvae.pl_modules.xrd_encoder import XRDEncoder
+from cdvae.pl_modules.xrd import XRDEncoder, XRDRegressor
 from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
 from scripts.eval_utils import load_model
@@ -23,7 +23,7 @@ dataset_to_prop = {
     'carbon_24': 'energy_per_atom',
 }
 
-class XRDTrainer:
+class XRDEncoderTrainer:
     def __init__(self, data_dir, save_file, model_path, batch_size, epochs, lr):
         
         self.data_dir = data_dir
@@ -144,19 +144,27 @@ class XRDTrainer:
         return running_loss / len(the_loader), all_embeddings
     
     def save(self, state_dict):
-        torch.save(state_dict, os.path.join(self.model_path, f'{self.save_file}.pt'))
-
+        torch.save(state_dict, os.path.join(self.model_path, f'{self.save_file}_encoder.pt'))
 
 
 def main():
     # Training settings
-    parser = argparse.ArgumentParser(description='Train the XRD encoder to predict latent molecule representations')
+    models = {
+        'encoder': XRDEncoderTrainer,
+    }
+    parser = argparse.ArgumentParser(description='Train an XRD module (regressor or encoder)')
     parser.add_argument(
         '--epochs',
         type=int,
         default=50,
         help='number of epochs to train (default: 10)'
-    )                   
+    )   
+    parser.add_argument(
+        '--model_type',
+        choices=['encoder'],
+        default='encoder',
+        help='type of model to train (encoder or regressor)'
+    )                
     parser.add_argument(
         '--batch_size', 
         type=int, 
@@ -181,23 +189,21 @@ def main():
     parser.add_argument(
         '--lr',
         type=float,
-        default=1e-5,
+        default=1e-4,
         metavar='LR',
         help='learning rate'
     )
     args = parser.parse_args()
+    args = args.__dict__
 
     run = wandb.init(
         # Set the project where this run will be logged
         project="xrd_latent_regression",
-        config=vars(args)
+        config=args
     )
 
-    trainer = XRDTrainer(**vars(args))
+    trainer = models[args.pop('model_type')](**args)
     trainer.train()
-
-    _, embeddings = trainer.eval(trainer.test_loader)
-    torch.save(embeddings, os.path.join(trainer.model_path, f'xrd_test_recon.pt'))
 
 if __name__ == "__main__":
     main()

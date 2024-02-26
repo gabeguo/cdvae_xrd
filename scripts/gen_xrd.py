@@ -64,8 +64,11 @@ def gen_xrd(args):
             xrd_tensor = create_xrd_tensor(args, pattern)
             xrd_tensor_list.append(xrd_tensor)
         # Save the XRD tensor
-        xrd_tensor = torch.stack(xrd_tensor_list)
-        torch.save(xrd_tensor, os.path.join(args.save_dir, file.replace('.csv', '.pt')))
+        xrd_df = pd.DataFrame(columns=['xrd'], dtype=object)
+        xrd_df['xrd'] = xrd_tensor_list
+        data = pd.concat([data, xrd_df], axis=1)
+        data.to_csv(os.path.join(args.save_dir, file), index=False)
+        # torch.save(xrd_tensor, os.path.join(args.save_dir, file.replace('.csv', '.pt')))
 
 
 if __name__ == '__main__':
