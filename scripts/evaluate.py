@@ -167,12 +167,13 @@ def generation(model, ld_kwargs, num_batches_to_sample, num_samples_per_z,
 
 def optimization(model, ld_kwargs, data_loader,
                  num_starting_points=100, num_gradient_steps=5000,
-                 lr=1e-3, num_saved_crys=10):
+                 lr=1e-3):
     if data_loader is not None:
         batch = next(iter(data_loader)).to(model.device)
         _, _, z = model.encode(batch)
         z = z[:num_starting_points].detach().clone()
         z.requires_grad = True
+        xrds = batch.y
     else:
         z = torch.randn(num_starting_points, model.hparams.hidden_dim,
                         device=model.device)
@@ -182,18 +183,19 @@ def optimization(model, ld_kwargs, data_loader,
     model.freeze()
 
     all_crystals = []
-    interval = num_gradient_steps // (num_saved_crys-1)
     for i in tqdm(range(num_gradient_steps)):
         opt.zero_grad()
         loss = model.fc_property(z).mean()
         loss.backward()
         opt.step()
-
-        if i % interval == 0 or i == (num_gradient_steps-1):
+        print("gradient step:", i)
+        if i == (num_gradient_steps-1):
             crystals = model.langevin_dynamics(z, ld_kwargs)
             all_crystals.append(crystals)
-    return {k: torch.cat([d[k] for d in all_crystals]).unsqueeze(0) for k in
+    dict = {k: torch.cat([d[k] for d in all_crystals]).unsqueeze(0) for k in
             ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
+    dict['xrds'] = xrds
+    return dict
 
 
 def main(args):
