@@ -117,12 +117,12 @@ def ms(center, radius, n_points=20):
     Z = radius * np.cos(v) + z
     return (X, Y, Z)
 
-def plot_materials(args, the_coords, atom_types, output_dir):
+def plot_materials(args, the_coords, atom_types, output_dir, batch_idx):
     for i in range(min(len(the_coords), args.num_materials)):
         curr_coords = the_coords[i]
         curr_atom_types = atom_types[i]
 
-        plot_material_single(curr_coords, curr_atom_types, output_dir, idx=i)
+        plot_material_single(curr_coords, curr_atom_types, output_dir, idx=i, batch_idx=batch_idx)
     
     return
 
@@ -136,7 +136,7 @@ def plot_xrds(args, xrds, output_dir):
         plt.close()
     return
 
-def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
+def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_idx=0):
     print(curr_coords)
     print(curr_atom_types)
     assert len(curr_atom_types) == len(curr_coords)
@@ -195,7 +195,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0):
 
     print('moo')
 
-    fig.write_image(os.path.join(output_dir, f'material{idx}.png'))
+    fig.write_image(os.path.join(output_dir, f'material{idx}_sample{batch_idx}.png'))
 
     return
 
@@ -238,23 +238,40 @@ if __name__ == "__main__":
 
         is_pred = 'pred' in the_name
 
-        frac_coords = the_dataset['frac_coords'].squeeze()
-        num_atoms = the_dataset['num_atoms'].squeeze()
-        atom_types = the_dataset['atom_types'].squeeze()
-        lengths = the_dataset['lengths'].squeeze()
-        angles = the_dataset['angles'].squeeze()
+        batched_frac_coords = the_dataset['frac_coords']
+        batched_num_atoms = the_dataset['num_atoms']
+        batched_atom_types = the_dataset['atom_types']
+        batched_lengths = the_dataset['lengths']
+        batched_angles = the_dataset['angles']
+        if not is_pred:
+            batched_frac_coords = batched_frac_coords.unsqueeze(0)
+            batched_num_atoms = batched_num_atoms.unsqueeze(0)
+            batched_atom_types = batched_atom_types.unsqueeze(0)
+            batched_lengths = batched_lengths.unsqueeze(0)
+            batched_angles = batched_angles.unsqueeze(0)
+
+        num_batches = batched_frac_coords.shape[0]
+        assert num_batches == batched_num_atoms.shape[0]
 
         curr_folder = os.path.join(args.results_folder, the_name)
 
         os.makedirs(curr_folder, exist_ok=True)
 
-        the_coords, atom_types, generated_xrds = create_materials(args, 
-                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=is_pred)
-        plot_materials(args, the_coords, atom_types, curr_folder)
-        if is_pred:
-            pred_xrd_folder = os.path.join(args.results_folder, 'pred_xrds')
-            os.makedirs(pred_xrd_folder, exist_ok=True)
-            plot_xrds(args, generated_xrds, pred_xrd_folder)
+        for i in range(num_batches):
+            frac_coords = batched_frac_coords[i]
+            num_atoms = batched_num_atoms[i]
+            atom_types = batched_atom_types[i]
+            lengths = batched_lengths[i]
+            angles = batched_angles[i]
+            
+            the_coords, atom_types, generated_xrds = create_materials(args, 
+                    frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=is_pred)
+            plot_materials(args, the_coords, atom_types, curr_folder, i)
+            if is_pred:
+                pred_xrd_folder = os.path.join(args.results_folder, 'pred_xrds')
+                os.makedirs(pred_xrd_folder, exist_ok=True)
+                if i == 0:
+                    plot_xrds(args, generated_xrds, pred_xrd_folder)
     
     xrds = results['xrds'].squeeze().numpy()
     xrd_graph_folder = os.path.join(args.results_folder, 'xrds')
