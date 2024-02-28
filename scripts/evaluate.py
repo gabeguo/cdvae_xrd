@@ -173,7 +173,7 @@ def optimization(model, ld_kwargs, data_loader,
         _, _, z = model.encode(batch)
         z = z[:num_starting_points].detach().clone()
         z.requires_grad = True
-        xrds = batch.y
+        xrds = batch.y.reshape(-1, 512)[:num_starting_points]
     else:
         z = torch.randn(num_starting_points, model.hparams.hidden_dim,
                         device=model.device)
@@ -188,7 +188,6 @@ def optimization(model, ld_kwargs, data_loader,
         loss = model.fc_property(z).mean()
         loss.backward()
         opt.step()
-        print("gradient step:", i)
         if i == (num_gradient_steps-1):
             crystals = model.langevin_dynamics(z, ld_kwargs)
             all_crystals.append(crystals)

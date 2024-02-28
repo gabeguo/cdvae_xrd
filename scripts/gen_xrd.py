@@ -32,7 +32,7 @@ def gen_xrd(args):
     for file in files:
         print(f'Processing {file}')
         # Load the data
-        data = pd.read_csv(os.path.join(data_dir, file))
+        data = pd.read_pickle(os.path.join(data_dir, file))
         # extract CIF
         cifs = data['cif'].values
         # iterate over the CIFs
@@ -67,7 +67,7 @@ def gen_xrd(args):
         xrd_df = pd.DataFrame(columns=['xrd'], dtype=object)
         xrd_df['xrd'] = xrd_tensor_list
         data = pd.concat([data, xrd_df], axis=1)
-        data.to_csv(os.path.join(args.save_dir, file), index=False)
+        data.to_pickle(os.path.join(args.save_dir, file))
         # torch.save(xrd_tensor, os.path.join(args.save_dir, file.replace('.csv', '.pt')))
 
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
     parser.add_argument(
         '--data_dir',
-        default = '/home/tsaidi/Research/cdvae_xrd/data/perov_5',
+        default = '/home/tsaidi/Research/cdvae_xrd/data/perov_5/no_xrd',
         type=str,
         help='path to input CIF files'
     )
