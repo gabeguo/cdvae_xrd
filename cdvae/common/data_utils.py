@@ -641,7 +641,10 @@ class StandardScalerTorch(object):
 
 
 def get_scaler_from_data_list(data_list, key):
-    targets = torch.tensor([d[key] for d in data_list])
+    targets_list = [d[key] for d in data_list]
+    if isinstance(targets_list[0], torch.Tensor):
+        targets_list = [t.numpy() for t in targets_list]
+    targets = torch.tensor(targets_list)
     scaler = StandardScalerTorch()
     scaler.fit(targets)
     return scaler
@@ -649,7 +652,7 @@ def get_scaler_from_data_list(data_list, key):
 
 def preprocess(input_file, num_workers, niggli, primitive, graph_method,
                prop_list):
-    df = pd.read_csv(input_file)
+    df = pd.read_pickle(input_file)
 
     def process_one(row, niggli, primitive, graph_method, prop_list):
         crystal_str = row['cif']

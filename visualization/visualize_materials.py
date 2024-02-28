@@ -202,7 +202,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
     parser.add_argument('--filepath', type=str, help='the file with the predictions from evaluate.py',
-                        default='/home/gabeguo/hydra/singlerun/2024-02-16/mp_20/eval_recon_xrd.pt')
+                        default='/home/tsaidi/Research/cdvae_xrd/hydra/singlerun/2024-02-27/perov/eval_opt.pt')
     parser.add_argument('--results_folder', type=str, help='where to save the visualizations',
                         default='material_vis')
     parser.add_argument('--xrd_vector_dim', type=int, help='what dimension are the xrds? (should be 512)',
@@ -215,6 +215,8 @@ if __name__ == "__main__":
                         default=10)
     parser.add_argument('--wave_source', type=str, help='What is the wave source?',
                         default='CuKa')
+    parser.add_argument('--task', choices=['recon', 'gen', 'opt'], help='What is the task?',
+                        default='recon')
 
     args = parser.parse_args()
 
@@ -230,30 +232,66 @@ if __name__ == "__main__":
     print('atom_types', results['atom_types'].shape)
     print('lengths', results['lengths'].shape)
     print('angles', results['angles'].shape)
+    print('xrds', results['xrds'].shape)
 
-    print('xrds', results['xrds'])
+    if args.task == 'recon':
+        for the_dataset, the_name in zip([results, results['input_data_batch']], 
+                                        ['pred', 'gt']):
 
-    for the_dataset, the_name in zip([results, results['input_data_batch']], 
-                                     ['pred', 'gt']):
+            is_pred = 'pred' in the_name
 
-        is_pred = 'pred' in the_name
+            batched_frac_coords = the_dataset['frac_coords']
+            batched_num_atoms = the_dataset['num_atoms']
+            batched_atom_types = the_dataset['atom_types']
+            batched_lengths = the_dataset['lengths']
+            batched_angles = the_dataset['angles']
+            if not is_pred:
+                batched_frac_coords = batched_frac_coords.unsqueeze(0)
+                batched_num_atoms = batched_num_atoms.unsqueeze(0)
+                batched_atom_types = batched_atom_types.unsqueeze(0)
+                batched_lengths = batched_lengths.unsqueeze(0)
+                batched_angles = batched_angles.unsqueeze(0)
 
+            num_batches = batched_frac_coords.shape[0]
+            assert num_batches == batched_num_atoms.shape[0]
+
+            curr_folder = os.path.join(args.results_folder, the_name)
+
+            os.makedirs(curr_folder, exist_ok=True)
+
+            for i in range(num_batches):
+                frac_coords = batched_frac_coords[i]
+                num_atoms = batched_num_atoms[i]
+                atom_types = batched_atom_types[i]
+                lengths = batched_lengths[i]
+                angles = batched_angles[i]
+
+                the_coords, atom_types, generated_xrds = create_materials(args, 
+                        frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=is_pred)
+                plot_materials(args, the_coords, atom_types, curr_folder, i)
+                if is_pred:
+                    pred_xrd_folder = os.path.join(args.results_folder, 'pred_xrds')
+                    os.makedirs(pred_xrd_folder, exist_ok=True)
+                    if i == 0:
+                        plot_xrds(args, generated_xrds, pred_xrd_folder)
+        
+        xrds = results['xrds'].squeeze().numpy()
+        xrd_graph_folder = os.path.join(args.results_folder, 'xrds')
+        os.makedirs(xrd_graph_folder, exist_ok=True)
+        plot_xrds(args, xrds, xrd_graph_folder)
+
+    elif args.task == 'opt':
+        the_dataset = results
         batched_frac_coords = the_dataset['frac_coords']
         batched_num_atoms = the_dataset['num_atoms']
         batched_atom_types = the_dataset['atom_types']
         batched_lengths = the_dataset['lengths']
         batched_angles = the_dataset['angles']
-        if not is_pred:
-            batched_frac_coords = batched_frac_coords.unsqueeze(0)
-            batched_num_atoms = batched_num_atoms.unsqueeze(0)
-            batched_atom_types = batched_atom_types.unsqueeze(0)
-            batched_lengths = batched_lengths.unsqueeze(0)
-            batched_angles = batched_angles.unsqueeze(0)
 
         num_batches = batched_frac_coords.shape[0]
         assert num_batches == batched_num_atoms.shape[0]
-
-        curr_folder = os.path.join(args.results_folder, the_name)
+        print('num_batches', num_batches)
+        curr_folder = os.path.join(args.results_folder, 'opt')
 
         os.makedirs(curr_folder, exist_ok=True)
 
@@ -263,19 +301,16 @@ if __name__ == "__main__":
             atom_types = batched_atom_types[i]
             lengths = batched_lengths[i]
             angles = batched_angles[i]
-            
+            print("shapes:", frac_coords.shape, num_atoms.shape, atom_types.shape, lengths.shape, angles.shape)
+
             the_coords, atom_types, generated_xrds = create_materials(args, 
-                    frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=is_pred)
+                    frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
             plot_materials(args, the_coords, atom_types, curr_folder, i)
-            if is_pred:
-                pred_xrd_folder = os.path.join(args.results_folder, 'pred_xrds')
-                os.makedirs(pred_xrd_folder, exist_ok=True)
-                if i == 0:
-                    plot_xrds(args, generated_xrds, pred_xrd_folder)
-    
-    xrds = results['xrds'].squeeze().numpy()
-    xrd_graph_folder = os.path.join(args.results_folder, 'xrds')
-    os.makedirs(xrd_graph_folder, exist_ok=True)
-    plot_xrds(args, xrds, xrd_graph_folder)
+            pred_xrd_folder = os.path.join(args.results_folder, 'pred_xrds')
+            os.makedirs(pred_xrd_folder, exist_ok=True)
+            plot_xrds(args, generated_xrds, pred_xrd_folder)
 
-
+        xrds = results['xrds'].cpu().squeeze().numpy()
+        xrd_graph_folder = os.path.join(args.results_folder, 'xrds')
+        os.makedirs(xrd_graph_folder, exist_ok=True)
+        plot_xrds(args, xrds, xrd_graph_folder)

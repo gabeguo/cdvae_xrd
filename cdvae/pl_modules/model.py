@@ -155,8 +155,11 @@ class CDVAE(BaseModule):
                                         self.hparams.fc_num_layers, MAX_ATOMIC_NUM)
         # for property prediction.
         if self.hparams.predict_property:
+            dim = 1
+            if self.hparams.data.prop == 'xrd':
+                dim = 512
             self.fc_property = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
-                                         self.hparams.fc_num_layers, 1)
+                                         self.hparams.fc_num_layers, dim)
 
         sigmas = torch.tensor(np.exp(np.linspace(
             np.log(self.hparams.sigma_begin),
@@ -311,7 +314,7 @@ class CDVAE(BaseModule):
     def forward(self, batch, teacher_forcing, training, z=None):
         # hacky way to resolve the NaN issue. Will need more careful debugging later.
         overwritten = False
-        if z is not None:
+        if z is None:
             overwritten = True
             mu, log_var, z = self.encode(batch)
 
@@ -474,7 +477,8 @@ class CDVAE(BaseModule):
         return F.cross_entropy(pred_num_atoms, batch.num_atoms)
 
     def property_loss(self, z, batch):
-        return F.mse_loss(self.fc_property(z), batch.y)
+        pred = self.fc_property(z)
+        return F.mse_loss(pred, batch.y.reshape(pred.shape[0], -1))
 
     def lattice_loss(self, pred_lengths_and_angles, batch):
         self.lattice_scaler.match_device(pred_lengths_and_angles)

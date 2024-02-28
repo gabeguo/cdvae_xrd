@@ -25,7 +25,7 @@ class CrystDataset(Dataset):
         super().__init__()
         self.path = path
         self.name = name
-        self.df = pd.read_csv(path)
+        self.df = pd.read_pickle(path)
         self.prop = prop
         self.niggli = niggli
         self.primitive = primitive
@@ -49,12 +49,15 @@ class CrystDataset(Dataset):
 
     def __getitem__(self, index):
         data_dict = self.cached_data[index]
-
         # scaler is set in DataModule set stage
         prop = self.scaler.transform(data_dict[self.prop])
         (frac_coords, atom_types, lengths, angles, edge_indices,
          to_jimages, num_atoms) = data_dict['graph_arrays']
-
+        
+        if "xrd" in data_dict.keys():
+            dim = 512
+        else:
+            dim = 1
         # atom_coords are fractional coordinates
         # edge_index is incremented during batching
         # https://pytorch-geometric.readthedocs.io/en/latest/notes/batching.html
@@ -69,7 +72,7 @@ class CrystDataset(Dataset):
             num_atoms=num_atoms,
             num_bonds=edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=prop.view(1, -1),
+            y=prop.view(dim, -1),
         )
         return data
 
