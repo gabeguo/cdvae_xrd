@@ -173,7 +173,10 @@ def optimization(model, ld_kwargs, data_loader,
         _, _, z = model.encode(batch)
         z = z[:num_starting_points].detach().clone()
         z.requires_grad = True
-        xrds = batch.y.reshape(-1, 512)[:num_starting_points]
+        scaled_xrds = batch.y.reshape(-1, 512)[:num_starting_points]
+        # inverse transform
+        model.scaler.match_device(scaled_xrds)
+        xrds = model.scaler.inverse_transform(scaled_xrds)
     else:
         z = torch.randn(num_starting_points, model.hparams.hidden_dim,
                         device=model.device)
