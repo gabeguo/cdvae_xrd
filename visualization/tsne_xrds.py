@@ -56,12 +56,22 @@ def tsne(args, X, Z):
 
     return
 
+def plot_xrds(xrds, output_dir, num_materials):
+    for i in range(min(num_materials, xrds.shape[0])):
+        curr_xrd = xrds[i]
+        assert curr_xrd.shape == (512,)
+        thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
+        plt.plot(thetas, curr_xrd)
+        plt.savefig(os.path.join(output_dir, f'material{i}.png'))
+        plt.close()
+    return
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='t-SNE of XRD vs embedding')
 
     parser.add_argument(
         '--model_path',
-        default='/home/gabeguo/hydra/singlerun/2024-02-29/perov',
+        default='/home/gabeguo/hydra/singlerun/2024-03-01/perov_standardized',
         type=str,
     )
     parser.add_argument(
@@ -105,8 +115,24 @@ if __name__ == "__main__":
         _, _, z = model.encode(batch)
         scaled_xrds = batch.y.reshape(-1, 512)
         # inverse transform
-        model.scaler.match_device(scaled_xrds)
-        xrds = model.scaler.inverse_transform(scaled_xrds)
+        # model.scaler.match_device(scaled_xrds)
+        # xrds = model.scaler.inverse_transform(scaled_xrds)
+        xrds = scaled_xrds
+
+        # plot XRDs
+        if idx == 0:
+            pred_xrds = model.fc_property(z)
+            # pred_xrds = model.scaler.inverse_transform(pred_xrds)
+            pred_xrds = pred_xrds.detach().cpu().numpy()
+            pred_xrd_dir = os.path.join(args.save_dir, 'pred_xrds')
+            os.makedirs(pred_xrd_dir, exist_ok=True)
+            plot_xrds(pred_xrds, output_dir=pred_xrd_dir, num_materials=10)
+
+            gt_xrds = xrds.detach().cpu().numpy()
+            gt_xrd_dir = os.path.join(args.save_dir, 'gt_xrds')
+            os.makedirs(gt_xrd_dir, exist_ok=True)
+            plot_xrds(gt_xrds, output_dir=gt_xrd_dir, num_materials=10)
+
 
         Z.append(z)
         X.append(xrds)

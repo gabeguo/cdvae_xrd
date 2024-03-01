@@ -202,7 +202,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
     parser.add_argument('--filepath', type=str, help='the file with the predictions from evaluate.py',
-                        default='/home/tsaidi/Research/cdvae_xrd/hydra/singlerun/2024-02-27/perov/eval_opt.pt')
+                        default='/home/gabeguo/hydra/singlerun/2024-02-29/perov/eval_opt.pt')
     parser.add_argument('--results_folder', type=str, help='where to save the visualizations',
                         default='material_vis')
     parser.add_argument('--xrd_vector_dim', type=int, help='what dimension are the xrds? (should be 512)',

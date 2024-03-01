@@ -60,7 +60,7 @@ logging:
   progress_bar_refresh_rate: 20
   wandb:
     name: ${expname}
-    project: crystal_generation_mit
+    project: crystal_generation_xrd
     entity: null
     log_model: true
     mode: online

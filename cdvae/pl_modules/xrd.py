@@ -87,4 +87,13 @@ class XRDRegressor(nn.Module):
         x = x.squeeze(1)
         assert x.shape == (batch_size, 512)
 
+        # normalize
+        max_by_xrd = torch.max(x, 1)[0].reshape(batch_size, 1).expand(-1, 512)
+        min_by_xrd = torch.min(x, 1)[0].reshape(batch_size, 1).expand(-1, 512)
+        assert max_by_xrd.shape == x.shape
+        assert min_by_xrd.shape == x.shape
+        x = (x - min_by_xrd) / (max_by_xrd - min_by_xrd)
+        assert torch.isclose(torch.min(x), torch.tensor(0.0))
+        assert torch.isclose(torch.max(x), torch.tensor(1.0))
+
         return x

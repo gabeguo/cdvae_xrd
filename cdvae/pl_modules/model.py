@@ -99,9 +99,8 @@ class CrystGNN_Supervise(BaseModule):
 
     def compute_stats(self, batch, preds, prefix):
         loss = F.mse_loss(preds, batch.y)
-        self.scaler.match_device(preds)
-        scaled_preds = self.scaler.inverse_transform(preds)
-        scaled_y = self.scaler.inverse_transform(batch.y)
+        scaled_preds = preds
+        scaled_y = batch.y
         mae = torch.mean(torch.abs(scaled_preds - scaled_y))
 
         log_dict = {
@@ -183,7 +182,6 @@ class CDVAE(BaseModule):
 
         # obtain from datamodule.
         self.lattice_scaler = None
-        self.scaler = None
 
     def reparameterize(self, mu, logvar):
         """
@@ -455,8 +453,7 @@ class CDVAE(BaseModule):
         return self.fc_num_atoms(z)
 
     def predict_property(self, z):
-        self.scaler.match_device(z)
-        return self.scaler.inverse_transform(self.fc_property(z))
+        return self.fc_property(z)
 
     def predict_lattice(self, z, num_atoms):
         self.lattice_scaler.match_device(z)

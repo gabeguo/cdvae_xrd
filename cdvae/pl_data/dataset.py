@@ -21,6 +21,8 @@ class CrystDataset(Dataset):
                  prop: ValueNode, niggli: ValueNode, primitive: ValueNode,
                  graph_method: ValueNode, preprocess_workers: ValueNode,
                  lattice_scale_method: ValueNode,
+                 horizontal_noise_range=(1e-2, 1.1e-2),
+                 vertical_noise=1e-3,
                  **kwargs):
         super().__init__()
         self.path = path
@@ -31,6 +33,9 @@ class CrystDataset(Dataset):
         self.primitive = primitive
         self.graph_method = graph_method
         self.lattice_scale_method = lattice_scale_method
+
+        self.horizontal_noise_range=horizontal_noise_range
+        self.vertical_noise=vertical_noise
 
         self.cached_data = preprocess(
             self.path,
@@ -44,18 +49,26 @@ class CrystDataset(Dataset):
         self.lattice_scaler = None
         self.scaler = None
 
+        # smooth XRDs
+        for curr_data_dict in self.cached_data:
+            curr_xrd = curr_data_dict[self.prop]
+            curr_xrd = curr_xrd.reshape((512,))
+            curr_xrd = self.augment_xrdStrip(curr_xrd)
+            curr_data_dict[self.prop] = curr_xrd
+
     def __len__(self) -> int:
         return len(self.cached_data)
 
     def __getitem__(self, index):
         data_dict = self.cached_data[index]
         # scaler is set in DataModule set stage
-        prop = self.scaler.transform(data_dict[self.prop])
+        prop = data_dict[self.prop]#self.scaler.transform(data_dict[self.prop])
         (frac_coords, atom_types, lengths, angles, edge_indices,
          to_jimages, num_atoms) = data_dict['graph_arrays']
         
         if "xrd" in data_dict.keys():
             dim = 512
+            prop = prop.view(dim, -1)
         else:
             dim = 1
         # atom_coords are fractional coordinates
@@ -72,9 +85,33 @@ class CrystDataset(Dataset):
             num_atoms=num_atoms,
             num_bonds=edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=prop.view(dim, -1),
+            y=prop,
         )
         return data
+
+    def augment_xrdStrip(self, curr_xrdStrip):
+        """
+        Augments curr_xrdStrip via:
+        -> Adding Gaussian peak broadening (horizontal)
+        -> Adding small Gaussian perturbations to peaks (vertical)
+        """
+        xrd = curr_xrdStrip.numpy()
+        assert xrd.shape == (512,)
+        # Peak broadening
+        filtered = gaussian_filter1d(xrd,
+                    sigma=np.random.uniform(
+                        low=512 * self.horizontal_noise_range[0], 
+                        high=512 * self.horizontal_noise_range[1]
+                    ), 
+                    mode='constant', cval=0)
+        filtered = filtered / np.max(filtered)
+        filtered = torch.from_numpy(filtered)
+        assert filtered.shape == curr_xrdStrip.shape
+        # Perturbation
+        perturbed = filtered + torch.normal(mean=0, std=self.vertical_noise, size=filtered.size())
+        perturbed = torch.maximum(perturbed, torch.zeros_like(perturbed))
+        perturbed = torch.minimum(perturbed, torch.ones_like(perturbed)) # band-pass filter
+        return perturbed
 
     def __repr__(self) -> str:
         return f"CrystDataset({self.name=}, {self.path=})"
