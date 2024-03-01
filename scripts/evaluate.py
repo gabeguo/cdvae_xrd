@@ -5,6 +5,7 @@ import os
 
 from tqdm import tqdm
 from torch.optim import Adam
+import torch.nn.functional as F
 from pathlib import Path
 from types import SimpleNamespace
 from torch_geometric.data import Batch
@@ -168,19 +169,17 @@ def generation(model, ld_kwargs, num_batches_to_sample, num_samples_per_z,
 def optimization(model, ld_kwargs, data_loader,
                  num_starting_points=100, num_gradient_steps=5000,
                  lr=1e-3):
-    if data_loader is not None:
-        batch = next(iter(data_loader)).to(model.device)
-        _, _, z = model.encode(batch)
-        z = z[:num_starting_points].detach().clone()
-        z.requires_grad = True
-        scaled_xrds = batch.y.reshape(-1, 512)[:num_starting_points]
-        # inverse transform
-        model.scaler.match_device(scaled_xrds)
-        xrds = model.scaler.inverse_transform(scaled_xrds)
-    else:
-        z = torch.randn(num_starting_points, model.hparams.hidden_dim,
-                        device=model.device)
-        z.requires_grad = True
+    assert data_loader is not None
+
+    batch = next(iter(data_loader)).to(model.device)
+    # Initialize random latent codes! (Nonsensical to encode, then decode)
+    z = torch.randn(num_starting_points, model.hparams.hidden_dim,
+                    device=model.device)
+    z.requires_grad = True
+    scaled_xrds = batch.y.reshape(-1, 512)[:num_starting_points]
+    # inverse transform
+    model.scaler.match_device(scaled_xrds)
+    xrds = model.scaler.inverse_transform(scaled_xrds)
 
     opt = Adam([z], lr=lr)
     model.freeze()
@@ -188,7 +187,7 @@ def optimization(model, ld_kwargs, data_loader,
     all_crystals = []
     for i in tqdm(range(num_gradient_steps)):
         opt.zero_grad()
-        loss = model.fc_property(z).mean()
+        loss = F.mse_loss(model.fc_property(z), xrds)
         loss.backward()
         opt.step()
         if i == (num_gradient_steps-1):
