@@ -154,10 +154,12 @@ class CDVAE(BaseModule):
         self.fc_composition = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
                                         self.hparams.fc_num_layers, MAX_ATOMIC_NUM)
         # for property prediction.
+        assert self.hparams.data.prop == 'xrd'
         if self.hparams.predict_property:
             if self.hparams.data.prop == 'xrd':
                 self.fc_property = XRDRegressor()
             else:
+                raise ValueError('should be XRD')
                 self.fc_property = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
                                          self.hparams.fc_num_layers, 1)
 
@@ -478,7 +480,9 @@ class CDVAE(BaseModule):
 
     def property_loss(self, z, batch):
         pred = self.fc_property(z)
-        return F.mse_loss(pred.squeeze(1), batch.y.reshape(pred.shape[0], -1))
+        y = batch.y.reshape(pred.shape[0], -1)
+        assert pred.shape == y.shape
+        return F.mse_loss(pred, y)
 
     def lattice_loss(self, pred_lengths_and_angles, batch):
         self.lattice_scaler.match_device(pred_lengths_and_angles)
