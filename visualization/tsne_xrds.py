@@ -2,32 +2,119 @@ from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
 import numpy as np
 import torch
+import os
+from pathlib import Path
+from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-X = torch.load('/home/gabeguo/cdvae/data/mp_20/xrd/val.pt').detach().cpu().numpy()
-print(X.shape)
-X_embedded = TSNE(n_components=2, perplexity=25, learning_rate=10).fit_transform(X)
-print(X_embedded.shape)
+from cdvae.pl_data.dataset import CrystDataset
+from cdvae.common.data_utils import get_scaler_from_data_list
+from scripts.eval_utils import load_model
 
-n_clusters = 10
-kmeans = KMeans(n_clusters=n_clusters, random_state=0, n_init="auto").fit(X_embedded)
-labels = kmeans.labels_
+import argparse
 
-# Thanks https://stackoverflow.com/a/32740814
+def tsne(args, X, Z):
+    # Define color map
+    # Thanks https://stackoverflow.com/a/32740814
+    # define the colormap
+    cmap = plt.cm.rainbow
+    # extract all colors from the .jet map
+    cmaplist = [cmap(i) for i in range(cmap.N)]
+    # create the new map
+    cmap = cmap.from_list('Custom cmap', cmaplist, cmap.N)
 
-# define the colormap
-cmap = plt.cm.rainbow
-# extract all colors from the .jet map
-cmaplist = [cmap(i) for i in range(cmap.N)]
-# create the new map
-cmap = cmap.from_list('Custom cmap', cmaplist, cmap.N)
+    # define the bins and normalize
+    bounds = np.linspace(0,args.n_clusters,args.n_clusters+1)
+    norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
-# define the bins and normalize
-bounds = np.linspace(0,n_clusters,n_clusters+1)
-norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+    # XRD Part
+    X = X.detach().cpu().numpy()
+    print(X.shape)
+    X_embedded = TSNE(n_components=2, perplexity=args.perplexity, learning_rate=10).fit_transform(X)
+    print(X_embedded.shape)
 
-plt.scatter(X_embedded[:,0], X_embedded[:,1], s=1, c=labels, cmap=cmap, norm=norm)
-plt.title('t-SNE of 512-dimensional XRD patterns')
-plt.savefig('tsne_xrd.png')
-plt.close()
+    kmeans = KMeans(n_clusters=args.n_clusters, random_state=0, n_init="auto").fit(X_embedded)
+    labels = kmeans.labels_
+
+    plt.scatter(X_embedded[:,0], X_embedded[:,1], s=1, c=labels, cmap=cmap, norm=norm)
+    plt.title('t-SNE of 512-dimensional XRD patterns')
+    plt.savefig(os.path.join(args.save_dir, 'tsne_xrd.png'))
+    plt.close()
+
+    # Compare Latents
+    Z = Z.detach().cpu().numpy()
+    print(np.isnan(Z).any())
+    print(np.isinf(Z).any())
+    Z_embedded = TSNE(n_components=2, perplexity=args.perplexity, learning_rate=10).fit_transform(Z)
+    print(Z_embedded.shape)
+
+    plt.scatter(Z_embedded[:,0], Z_embedded[:,1], s=1, c=labels, cmap=cmap, norm=norm)
+    plt.title('t-SNE of embedded latent codes')
+    plt.savefig(os.path.join(args.save_dir, 'tsne_latent.png'))
+    plt.close()
+
+    return
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='t-SNE of XRD vs embedding')
+
+    parser.add_argument(
+        '--model_path',
+        default='/home/gabeguo/hydra/singlerun/2024-02-29/perov',
+        type=str,
+    )
+    parser.add_argument(
+        '--data_dir',
+        default='/home/gabeguo/cdvae_xrd/data/perov_5',
+        type=str,
+    )
+    parser.add_argument(
+        '--batch_size',
+        default=256,
+        type=int,
+    )
+    parser.add_argument(
+        '--save_dir',
+        default='vis_outputs',
+        type=str
+    )
+    parser.add_argument(
+        '--n_clusters',
+        default=10,
+        type=int
+    )
+    parser.add_argument(
+        '--perplexity',
+        default=25,
+        type=float
+    )
+
+    args = parser.parse_args()
+
+    os.makedirs(args.save_dir, exist_ok=True)
+
+    model, data_loader, cfg = load_model(
+        Path(args.model_path), load_data=True)
+
+    Z = list()
+    X = list()
+
+    for idx, batch in enumerate(data_loader):
+        batch = next(iter(data_loader)).to(model.device)
+        _, _, z = model.encode(batch)
+        scaled_xrds = batch.y.reshape(-1, 512)
+        # inverse transform
+        model.scaler.match_device(scaled_xrds)
+        xrds = model.scaler.inverse_transform(scaled_xrds)
+
+        Z.append(z)
+        X.append(xrds)
+    
+    Z = torch.cat(Z, dim=0)
+    X = torch.cat(X, dim=0)
+
+    assert Z.shape == (X.shape[0], 256)
+    assert X.shape == (Z.shape[0], 512)
+
+    tsne(args, X=X, Z=Z)
