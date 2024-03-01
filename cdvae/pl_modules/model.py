@@ -16,7 +16,7 @@ from cdvae.common.data_utils import (
     frac_to_cart_coords, min_distance_sqr_pbc)
 from cdvae.pl_modules.embeddings import MAX_ATOMIC_NUM
 from cdvae.pl_modules.embeddings import KHOT_EMBEDDINGS
-
+from cdvae.pl_modules.xrd import XRDRegressor
 
 def build_mlp(in_dim, hidden_dim, fc_num_layers, out_dim):
     mods = [nn.Linear(in_dim, hidden_dim), nn.ReLU()]
@@ -155,11 +155,11 @@ class CDVAE(BaseModule):
                                         self.hparams.fc_num_layers, MAX_ATOMIC_NUM)
         # for property prediction.
         if self.hparams.predict_property:
-            dim = 1
             if self.hparams.data.prop == 'xrd':
-                dim = 512
-            self.fc_property = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
-                                         self.hparams.fc_num_layers, dim)
+                self.fc_property = XRDRegressor()
+            else:
+                self.fc_property = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
+                                         self.hparams.fc_num_layers, 1)
 
         sigmas = torch.tensor(np.exp(np.linspace(
             np.log(self.hparams.sigma_begin),
