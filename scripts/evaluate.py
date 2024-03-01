@@ -185,9 +185,10 @@ def optimization(model, ld_kwargs, data_loader,
     model.freeze()
 
     all_crystals = []
-    for i in tqdm(range(num_gradient_steps)):
+    for i in range(num_gradient_steps):
         opt.zero_grad()
         loss = F.mse_loss(model.fc_property(z), xrds)
+        print(f'predicted property loss: {loss.item()}')
         loss.backward()
         opt.step()
         if i == (num_gradient_steps-1):
