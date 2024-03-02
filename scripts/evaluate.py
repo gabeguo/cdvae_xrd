@@ -167,8 +167,8 @@ def generation(model, ld_kwargs, num_batches_to_sample, num_samples_per_z,
 
 
 def optimization(model, ld_kwargs, data_loader,
-                 num_starting_points=100, num_gradient_steps=5000,
-                 lr=1e-3):
+                 num_starting_points=100, num_gradient_steps=20000,
+                 lr=1e-2):
     assert data_loader is not None
 
     batch = next(iter(data_loader)).to(model.device)
