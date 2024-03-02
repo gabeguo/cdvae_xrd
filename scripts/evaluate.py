@@ -176,10 +176,7 @@ def optimization(model, ld_kwargs, data_loader,
     z = torch.randn(num_starting_points, model.hparams.hidden_dim,
                     device=model.device)
     z.requires_grad = True
-    scaled_xrds = batch.y.reshape(-1, 512)[:num_starting_points]
-    # inverse transform
-    model.scaler.match_device(scaled_xrds)
-    xrds = model.scaler.inverse_transform(scaled_xrds)
+    noisy_xrds = batch.y.reshape(-1, 512)[:num_starting_points]
 
     opt = Adam([z], lr=lr)
     model.freeze()
@@ -187,7 +184,7 @@ def optimization(model, ld_kwargs, data_loader,
     all_crystals = []
     for i in range(num_gradient_steps):
         opt.zero_grad()
-        loss = F.mse_loss(model.fc_property(z), xrds)
+        loss = F.mse_loss(model.fc_property(z), noisy_xrds)
         print(f'predicted property loss: {loss.item()}')
         loss.backward()
         opt.step()
@@ -196,8 +193,8 @@ def optimization(model, ld_kwargs, data_loader,
             all_crystals.append(crystals)
     dict = {k: torch.cat([d[k] for d in all_crystals]).unsqueeze(0) for k in
             ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
-    dict['xrds'] = xrds
-    return dict
+    dict['xrds'] = noisy_xrds
+    return dict, batch
 
 
 def main(args):
@@ -226,7 +223,6 @@ def main(args):
         )
         test_dataset.lattice_scaler = torch.load(
             Path(model_path) / 'lattice_scaler.pt')
-        test_dataset.scaler = torch.load(Path(model_path) / 'prop_scaler.pt')
         test_loader = DataLoader(
             test_dataset,
             batch_size=args.batch_size,
@@ -297,8 +293,9 @@ def main(args):
             loader = test_loader
         else:
             loader = None
-        optimized_crystals = optimization(model, ld_kwargs, loader)
-        optimized_crystals.update({'eval_setting': args,
+        optimized_crystals, data = optimization(model, ld_kwargs, loader)
+        optimized_crystals.update({'data': data,
+                                   'eval_setting': args,
                                    'time': time.time() - start_time})
 
         if args.label == '':
