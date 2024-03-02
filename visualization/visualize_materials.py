@@ -7,6 +7,7 @@ from pymatgen.core.periodic_table import Element
 from pymatgen.core.structure import Structure
 from pymatgen.core.lattice import Lattice
 from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
+from scipy.ndimage import gaussian_filter1d
 from scripts.gen_xrd import create_xrd_tensor
 from scripts.eval_utils import get_crystals_list
 import warnings
@@ -94,6 +95,31 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
 
     return all_coords, all_atom_types, all_xrds
 
+
+def augment_xrdStrip(curr_xrdStrip, horizontal_noise_range=(1e-2, 1.1e-2), vertical_noise=1e-3):
+    """
+    Augments curr_xrdStrip via:
+    -> Adding Gaussian peak broadening (horizontal)
+    -> Adding small Gaussian perturbations to peaks (vertical)
+    """
+    xrd = curr_xrdStrip.numpy()
+    assert xrd.shape == (512,)
+    # Peak broadening
+    filtered = gaussian_filter1d(xrd,
+                sigma=np.random.uniform(
+                    low=512 * horizontal_noise_range[0], 
+                    high=512 * horizontal_noise_range[1]
+                ), 
+                mode='constant', cval=0)
+    filtered = filtered / np.max(filtered)
+    filtered = torch.from_numpy(filtered)
+    assert filtered.shape == curr_xrdStrip.shape
+    # Perturbation
+    perturbed = filtered + torch.normal(mean=0, std=vertical_noise, size=filtered.size())
+    perturbed = torch.maximum(perturbed, torch.zeros_like(perturbed))
+    perturbed = torch.minimum(perturbed, torch.ones_like(perturbed)) # band-pass filter
+    return perturbed
+
 # Thanks ChatGPT!
 # Function to generate sphere coordinates
 def generate_sphere_coordinates(center, radius, n_points=100):
@@ -137,8 +163,6 @@ def plot_xrds(args, xrds, output_dir):
     return
 
 def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_idx=0):
-    print(curr_coords)
-    print(curr_atom_types)
     assert len(curr_atom_types) == len(curr_coords)
     assert len(curr_coords.shape) == 2 and curr_coords.shape[1] == 3
 
@@ -193,8 +217,6 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_
         scene_aspectmode='data'
     )
 
-    print('moo')
-
     fig.write_image(os.path.join(output_dir, f'material{idx}_sample{batch_idx}.png'))
 
     return
@@ -221,18 +243,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     results = torch.load(args.filepath)
-
-    print(len(results))
-
-    for item in results:
-        print(item)
-
-    print('frac_coords', results['frac_coords'].shape)
-    print('num_atoms', results['num_atoms'].shape)
-    print('atom_types', results['atom_types'].shape)
-    print('lengths', results['lengths'].shape)
-    print('angles', results['angles'].shape)
-    print('xrds', results['xrds'].shape)
 
     if args.task == 'recon':
         for the_dataset, the_name in zip([results, results['input_data_batch']], 
@@ -315,19 +325,25 @@ if __name__ == "__main__":
         xrds = results['xrds'].cpu().squeeze().numpy()
         os.makedirs(base_truth_xrd_folder, exist_ok=True)
         plot_xrds(args, xrds, base_truth_xrd_folder)
-        
+
         for i in range(num_batches):
             frac_coords = batched_frac_coords[i]
             num_atoms = batched_num_atoms[i]
             atom_types = batched_atom_types[i]
             lengths = batched_lengths[i]
             angles = batched_angles[i]
-            print("shapes:", frac_coords.shape, num_atoms.shape, atom_types.shape, lengths.shape, angles.shape)
 
             # predictions
             the_coords, atom_types, generated_xrds = create_materials(args, 
                     frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
+
             plot_materials(args, the_coords, atom_types, opt_materials_folder, i)
+            # apply gaussian smoothing to the XRDs (to match base-truth gaussian smoothed xrds)
+            smoothed_xrds = list()
+            for i in range(generated_xrds.shape[0]):
+                smoothed_xrd = augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
+                smoothed_xrds.append(smoothed_xrd)
+            generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
             plot_xrds(args, generated_xrds, pred_xrd_folder)
 
             # ground truth
