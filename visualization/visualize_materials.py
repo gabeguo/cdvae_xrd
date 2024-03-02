@@ -202,7 +202,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
     parser.add_argument('--filepath', type=str, help='the file with the predictions from evaluate.py',
-                        default='/home/gabeguo/hydra/singlerun/2024-02-29/perov/eval_opt.pt')
+                        default='/home/tsaidi/Research/cdvae_xrd/hydra/singlerun/2024-03-01/noisy_xrd_standardization/eval_opt.pt')
     parser.add_argument('--results_folder', type=str, help='where to save the visualizations',
                         default='material_vis')
     parser.add_argument('--xrd_vector_dim', type=int, help='what dimension are the xrds? (should be 512)',
@@ -282,6 +282,15 @@ if __name__ == "__main__":
 
     elif args.task == 'opt':
         the_dataset = results
+        # fetch base truth materials
+        base_truth = the_dataset['data']
+        base_truth_frac_coords = base_truth['frac_coords']
+        base_truth_num_atoms = base_truth['num_atoms']
+        base_truth_atom_types = base_truth['atom_types']
+        base_truth_lengths = base_truth['lengths']
+        base_truth_angles = base_truth['angles']
+        
+        # fetch the optimized materials
         batched_frac_coords = the_dataset['frac_coords']
         batched_num_atoms = the_dataset['num_atoms']
         batched_atom_types = the_dataset['atom_types']
@@ -291,10 +300,22 @@ if __name__ == "__main__":
         num_batches = batched_frac_coords.shape[0]
         assert num_batches == batched_num_atoms.shape[0]
         print('num_batches', num_batches)
-        curr_folder = os.path.join(args.results_folder, 'opt')
+        
+        # create the folders - optimization
+        opt_materials_folder = os.path.join(args.results_folder, 'opt_materials')
+        os.makedirs(opt_materials_folder, exist_ok=True)
+        pred_xrd_folder = os.path.join(args.results_folder, 'opt_xrds')
+        os.makedirs(pred_xrd_folder, exist_ok=True)
 
-        os.makedirs(curr_folder, exist_ok=True)
-
+        # create the folders - base truth
+        base_truth_folder = os.path.join(args.results_folder, 'base_truth_materials')
+        os.makedirs(base_truth_folder, exist_ok=True)
+        base_truth_xrd_folder = os.path.join(args.results_folder, 'base_truth_xrds')
+        os.makedirs(base_truth_xrd_folder, exist_ok=True)
+        xrds = results['xrds'].cpu().squeeze().numpy()
+        os.makedirs(base_truth_xrd_folder, exist_ok=True)
+        plot_xrds(args, xrds, base_truth_xrd_folder)
+        
         for i in range(num_batches):
             frac_coords = batched_frac_coords[i]
             num_atoms = batched_num_atoms[i]
@@ -303,14 +324,13 @@ if __name__ == "__main__":
             angles = batched_angles[i]
             print("shapes:", frac_coords.shape, num_atoms.shape, atom_types.shape, lengths.shape, angles.shape)
 
+            # predictions
             the_coords, atom_types, generated_xrds = create_materials(args, 
                     frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
-            plot_materials(args, the_coords, atom_types, curr_folder, i)
-            pred_xrd_folder = os.path.join(args.results_folder, 'pred_xrds')
-            os.makedirs(pred_xrd_folder, exist_ok=True)
+            plot_materials(args, the_coords, atom_types, opt_materials_folder, i)
             plot_xrds(args, generated_xrds, pred_xrd_folder)
 
-        xrds = results['xrds'].cpu().squeeze().numpy()
-        xrd_graph_folder = os.path.join(args.results_folder, 'xrds')
-        os.makedirs(xrd_graph_folder, exist_ok=True)
-        plot_xrds(args, xrds, xrd_graph_folder)
+            # ground truth
+            the_coords, atom_types, generated_xrds = create_materials(args, 
+                    base_truth_frac_coords, base_truth_num_atoms, base_truth_atom_types, base_truth_lengths, base_truth_angles, create_xrd=True)
+            plot_materials(args, the_coords, atom_types, base_truth_folder, i)
