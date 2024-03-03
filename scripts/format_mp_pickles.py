@@ -112,7 +112,7 @@ if __name__ == "__main__":
         type=str
     )
     parser.add_argument(
-        '--random_seed',
+        '--seed',
         default=0,
         type=str
     )
