@@ -209,7 +209,7 @@ def main(args):
                                 save_traj=args.save_traj,
                                 disable_bar=args.disable_bar)
     # overwrite
-    if args.xrd:
+    if args.xrd: # TODO: remove
         dataset_to_prop = {
             'perov_5': 'heat_ref',
             'mp_20': 'formation_energy_per_atom',
@@ -308,7 +308,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', required=True)
-    parser.add_argument('--xrd', action='store_true')
+    parser.add_argument('--xrd', action='store_true') # TODO: deprecate option
     parser.add_argument('--data_dir', default='data', type=str)
     parser.add_argument('--tasks', nargs='+', default=['recon', 'gen', 'opt'])
     parser.add_argument('--n_step_each', default=100, type=int)

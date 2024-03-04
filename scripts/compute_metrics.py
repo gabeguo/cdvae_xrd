@@ -23,6 +23,7 @@ from eval_utils import (
 CrystalNNFP = CrystalNNFingerprint.from_preset("ops")
 CompFP = ElementProperty.from_preset('magpie')
 
+# TODO: this is not applicable; remove and fix references
 Percentiles = {
     'mp20': np.array([-3.17562208, -2.82196882, -2.52814761]),
     'carbon': np.array([-154.527093, -154.45865733, -154.44206825]),
@@ -322,6 +323,7 @@ def main(args):
         all_metrics.update(gen_metrics)
 
     if 'opt' in args.tasks:
+        # TODO: redo evaluation metrics for XRD
         opt_file_path = get_file_paths(args.root_path, 'opt', args.label)
         crys_array_list, _ = get_crystal_array_list(opt_file_path)
         opt_crys = p_map(lambda x: Crystal(x), crys_array_list)
