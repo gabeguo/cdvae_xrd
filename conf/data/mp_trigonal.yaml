@@ -26,7 +26,7 @@ datamodule:
     train:
       _target_: cdvae.pl_data.dataset.CrystDataset
       name: Formation energy train
-      path: ${data.root_path}/val.csv
+      path: ${data.root_path}/train.csv
       prop: ${data.prop}
       niggli: ${data.niggli}
       primitive: ${data.primitive}
