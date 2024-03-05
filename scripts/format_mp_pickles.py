@@ -7,8 +7,6 @@ import os
 from tqdm import tqdm
 import random
 
-MAX_ATOMS = 24
-
 def good_file_format(struct_filename):
     format = r'^mp-\d+_Structure[.]pickle$'
     return re.match(format, struct_filename)
@@ -56,7 +54,7 @@ def main(args):
             noshows.append(the_mpid)
             continue
         the_structure = pd.read_pickle(struct_filepath)
-        if the_structure.num_sites >= MAX_ATOMS:
+        if the_structure.num_sites >= args.max_atoms:
             too_big.append(the_mpid)
             continue
         the_xrd = create_xrd_tensor(args, pd.read_pickle(xrd_filepath))
@@ -131,6 +129,11 @@ if __name__ == "__main__":
     parser.add_argument(
         '--val_ratio',
         default=0.1,
+        type=float
+    )
+    parser.add_argument(
+        '--max_atoms',
+        default=50,
         type=float
     )
     args = parser.parse_args()
