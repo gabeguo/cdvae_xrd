@@ -32,7 +32,8 @@ def main(args):
             
             closest_tensor_idx = int(idx / len(xrd_intensities) * args.xrd_dim)
             xrd_tensor[closest_tensor_idx] = max(xrd_tensor[closest_tensor_idx],
-                                                torch.normal(mean=intensity_mean, std=intensity_std, size=(1,)).item())
+                                                 intensity_mean)
+                                                #torch.normal(mean=intensity_mean, std=intensity_std, size=(1,)).item())
         
         print('moo')
         #print(xrd_tensor)
