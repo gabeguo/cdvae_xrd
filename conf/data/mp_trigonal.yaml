@@ -9,7 +9,7 @@ graph_method: crystalnn
 lattice_scale_method: scale_length
 preprocess_workers: 30
 readout: mean
-max_atoms: 24
+max_atoms: 50
 otf_graph: false
 eval_model_name: mp_trigonal
 
@@ -26,7 +26,7 @@ datamodule:
     train:
       _target_: cdvae.pl_data.dataset.CrystDataset
       name: Formation energy train
-      path: ${data.root_path}/train.csv
+      path: ${data.root_path}/val.csv
       prop: ${data.prop}
       niggli: ${data.niggli}
       primitive: ${data.primitive}
