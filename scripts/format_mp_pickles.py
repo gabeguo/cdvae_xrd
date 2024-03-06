@@ -41,6 +41,7 @@ def main(args):
     random.seed(args.seed)
 
     noshows = list()
+    too_big = list()
 
     cifs = list()
     xrds = list()
@@ -53,6 +54,9 @@ def main(args):
             noshows.append(the_mpid)
             continue
         the_structure = pd.read_pickle(struct_filepath)
+        if the_structure.num_sites >= args.max_atoms:
+            too_big.append(the_mpid)
+            continue
         the_xrd = create_xrd_tensor(args, pd.read_pickle(xrd_filepath))
         cif_writer = CifWriter(the_structure)
         cif_string = cif_writer.__str__()
@@ -76,6 +80,7 @@ def main(args):
         save_df_with_indices(mpids=mpids, cifs=cifs, xrds=xrds, indices=curr_indices, name=curr_name)
 
     print('noshows:', len(noshows), ' : ', noshows)
+    print(f'too big: {len(too_big)} / {len(mpids) + len(too_big)}')
 
     return
 
@@ -124,6 +129,11 @@ if __name__ == "__main__":
     parser.add_argument(
         '--val_ratio',
         default=0.1,
+        type=float
+    )
+    parser.add_argument(
+        '--max_atoms',
+        default=50,
         type=float
     )
     args = parser.parse_args()
