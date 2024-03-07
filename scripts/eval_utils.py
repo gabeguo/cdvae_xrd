@@ -52,9 +52,11 @@ def load_config(model_path):
     return cfg
 
 
-def load_model(model_path, load_data=False, testing=True):
+def load_model(model_path, load_data=False, testing=True, batch_size=None):
     with initialize_config_dir(str(model_path)):
         cfg = compose(config_name='hparams')
+        if batch_size is not None:
+            cfg.data.datamodule.batch_size.test = batch_size
         model = hydra.utils.instantiate(
             cfg.model,
             optim=cfg.optim,
