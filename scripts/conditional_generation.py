@@ -2,6 +2,7 @@ import time
 import argparse
 import torch
 import os
+import json
 
 from tqdm import tqdm
 from torch.optim import Adam
@@ -29,10 +30,12 @@ def optimization(model, ld_kwargs, data_loader,
     opt_xrd_folder = f'materials_viz/test/opt_xrd'
     gt_material_folder = f'materials_viz/test/base_truth_material'
     gt_xrd_folder = f'materials_viz/test/base_truth_xrd'
+    metrics_folder = f'materials_viz/test/metrics'
     os.makedirs(opt_material_folder, exist_ok=True)
     os.makedirs(opt_xrd_folder, exist_ok=True)
     os.makedirs(gt_material_folder, exist_ok=True)
     os.makedirs(gt_xrd_folder, exist_ok=True)
+    os.makedirs(metrics_folder, exist_ok=True)
 
     m = MultivariateNormal(torch.zeros(model.hparams.hidden_dim).cuda(), torch.eye(model.hparams.hidden_dim).cuda())
 
@@ -128,6 +131,9 @@ def optimization(model, ld_kwargs, data_loader,
 
         composition_error = compare_composition(atom_types, opt_atom_types)
         print(f'composition error: {composition_error}')
+
+        with open(f'{metrics_folder}/metrics{j}.json', 'w') as fout:
+            json.dump({'xrd error':xrd_error, 'composition error':composition_error}, fout, indent=4)
 
 def get_elemental_ratios(atom_types):
     one_hot = np.zeros(119+1)
