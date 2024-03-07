@@ -21,91 +21,96 @@ from visualization.visualize_materials import create_materials, augment_xrdStrip
 
 def optimization(model, ld_kwargs, data_loader,
                  num_starting_points=1000, num_gradient_steps=5000,
-                 lr=1e-3):
+                 lr=1e-3, k=10):
     assert data_loader is not None
 
-    batch = next(iter(data_loader)).to(model.device)
-    # Initialize random latent codes! (Nonsensical to encode, then decode)
-    
-    z = torch.randn(num_starting_points, model.hparams.hidden_dim,
-                    device=model.device)
-    
-    z.requires_grad = True
-    target_noisy_xrd = batch.y.reshape(1, 512)
-    opt = Adam([z], lr=lr)
-    model.freeze()
+    j = 0
+    for batch in data_loader:
+        if j == k:
+            break
+        batch = batch.to(model.device)
+        # Initialize random latent codes! (Nonsensical to encode, then decode)
+        
+        z = torch.randn(num_starting_points, model.hparams.hidden_dim,
+                        device=model.device)
+        
+        z.requires_grad = True
+        target_noisy_xrd = batch.y.reshape(1, 512)
+        opt = Adam([z], lr=lr)
+        model.freeze()
 
-    for i in range(num_gradient_steps):
-        opt.zero_grad()
-        loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
-        print(f'predicted property loss: {loss.item()}')
-        # save elementwise mse
-        loss.backward()
-        opt.step()
-        if i == (num_gradient_steps-1):
-            crystals = model.langevin_dynamics(z, ld_kwargs)
-            crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
+        for i in range(num_gradient_steps):
+            opt.zero_grad()
+            loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
+            print(f'predicted property loss: {loss.item()}')
+            # save elementwise mse
+            loss.backward()
+            opt.step()
+            if i == (num_gradient_steps-1):
+                crystals = model.langevin_dynamics(z, ld_kwargs)
+                crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
 
-    # convert crystals to xrds
-    frac_coords = crystals['frac_coords']
-    num_atoms = crystals['num_atoms']
-    atom_types = crystals['atom_types']
-    lengths = crystals['lengths']
-    angles = crystals['angles']
+        # convert crystals to xrds
+        frac_coords = crystals['frac_coords']
+        num_atoms = crystals['num_atoms']
+        atom_types = crystals['atom_types']
+        lengths = crystals['lengths']
+        angles = crystals['angles']
 
-    args = SimpleNamespace()
-    args.wave_source = 'CuKa'
-    args.num_materials = num_starting_points
-    args.xrd_vector_dim = 512
-    args.max_theta = 180
-    args.min_theta = 0
+        args = SimpleNamespace()
+        args.wave_source = 'CuKa'
+        args.num_materials = num_starting_points
+        args.xrd_vector_dim = 512
+        args.max_theta = 180
+        args.min_theta = 0
 
-    # predictions
-    the_coords, atom_types, generated_xrds = create_materials(args, 
-            frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
+        # predictions
+        the_coords, atom_types, generated_xrds = create_materials(args, 
+                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
 
-    # apply smoothing to the XRD patterns
-    smoothed_xrds = list()
-    for i in range(generated_xrds.shape[0]):
-        smoothed_xrd = augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
-        smoothed_xrds.append(smoothed_xrd)
-    generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
+        # apply smoothing to the XRD patterns
+        smoothed_xrds = list()
+        for i in range(generated_xrds.shape[0]):
+            smoothed_xrd = augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
+            smoothed_xrds.append(smoothed_xrd)
+        generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
 
-    # compute loss on desired and generated xrds
-    target = target_noisy_xrd.broadcast_to(generated_xrds.shape[0], 512)
-    input = torch.tensor(generated_xrds).to(model.device)
-    loss = F.mse_loss(input, target, reduction='none').mean(dim=-1)
-    # find the minimum loss element
-    min_loss_idx = torch.argmin(loss)
-    # construct the corresponding crystal
-    opt_coords = the_coords[min_loss_idx]
-    opt_atom_types = atom_types[min_loss_idx]
-    opt_xrd = input[min_loss_idx, :].unsqueeze(0).cpu().numpy()
-    # save the optimal crystal and its xrd
-    material_folder = 'materials_viz/test/opt_material'
-    xrd_folder = 'materials_viz/test/opt_xrd'
-    os.makedirs(material_folder, exist_ok=True)
-    os.makedirs(xrd_folder, exist_ok=True)
-    plot_material_single(opt_coords, opt_atom_types, material_folder)
-    plot_xrds(args, opt_xrd, xrd_folder)
+        # compute loss on desired and generated xrds
+        target = target_noisy_xrd.broadcast_to(generated_xrds.shape[0], 512)
+        input = torch.tensor(generated_xrds).to(model.device)
+        loss = F.mse_loss(input, target, reduction='none').mean(dim=-1)
+        # find the minimum loss element
+        min_loss_idx = torch.argmin(loss)
+        # construct the corresponding crystal
+        opt_coords = the_coords[min_loss_idx]
+        opt_atom_types = atom_types[min_loss_idx]
+        opt_xrd = input[min_loss_idx, :].unsqueeze(0).cpu().numpy()
+        # save the optimal crystal and its xrd
+        material_folder = f'materials_viz/test/opt_material_{j}'
+        xrd_folder = f'materials_viz/test/opt_xrd_{j}'
+        os.makedirs(material_folder, exist_ok=True)
+        os.makedirs(xrd_folder, exist_ok=True)
+        plot_material_single(opt_coords, opt_atom_types, material_folder)
+        plot_xrds(args, opt_xrd, xrd_folder)
 
-    # plot base truth
-    frac_coords = batch.frac_coords
-    num_atoms = batch.num_atoms
-    atom_types = batch.atom_types
-    lengths = batch.lengths
-    angles = batch.angles
+        # plot base truth
+        frac_coords = batch.frac_coords
+        num_atoms = batch.num_atoms
+        atom_types = batch.atom_types
+        lengths = batch.lengths
+        angles = batch.angles
 
-    the_coords, atom_types, generated_xrds = create_materials(args, 
-            frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
-    the_coords = np.array(the_coords)[0]
-    atom_types = np.array(atom_types)[0]
+        the_coords, atom_types, generated_xrds = create_materials(args, 
+                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
+        the_coords = np.array(the_coords)[0]
+        atom_types = np.array(atom_types)[0]
 
-    os.makedirs('materials_viz/test/base_truth_material', exist_ok=True)
-    os.makedirs('materials_viz/test/base_truth_xrd', exist_ok=True)
-    plot_material_single(the_coords, atom_types, 'materials_viz/test/base_truth_material')
-    plot_xrds(args, target_noisy_xrd.cpu().numpy(), 'materials_viz/test/base_truth_xrd')
+        os.makedirs(f'materials_viz/test/base_truth_material_{j}', exist_ok=True)
+        os.makedirs(f'materials_viz/test/base_truth_xrd_{j}', exist_ok=True)
+        plot_material_single(the_coords, atom_types, f'materials_viz/test/base_truth_material_{j}')
+        plot_xrds(args, target_noisy_xrd.cpu().numpy(), f'materials_viz/test/base_truth_xrd_{j}')
 
+        j += 1
 
 def main(args):
     # load_data if do reconstruction.
