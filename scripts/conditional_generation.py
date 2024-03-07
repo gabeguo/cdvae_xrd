@@ -22,7 +22,7 @@ from visualization.visualize_materials import create_materials, augment_xrdStrip
 
 def optimization(model, ld_kwargs, data_loader,
                  num_starting_points=1000, num_gradient_steps=5000,
-                 lr=1e-3, k=10):
+                 lr=1e-3, k=10, l2_penalty=1e-5):
     assert data_loader is not None
 
     m = MultivariateNormal(torch.zeros(model.hparams.hidden_dim).cuda(), torch.eye(model.hparams.hidden_dim).cuda())
@@ -44,15 +44,18 @@ def optimization(model, ld_kwargs, data_loader,
         with tqdm(total=num_gradient_steps, desc="Property opt", unit="steps") as pbar:
             for i in range(num_gradient_steps):
                 opt.zero_grad()
-                loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
+                xrd_loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
                 prob = m.log_prob(z).mean()
-                pbar.set_postfix(loss=f"XRD loss: {loss.item():.3e}; Gaussian log PDF: {prob.item():.3e}", refresh=True)
+                pbar.set_postfix(loss=f"XRD loss: {xrd_loss.item():.3e}; Gaussian log PDF: {prob.item():.3e}", refresh=True)
                 # Update the progress bar by one step
                 pbar.update(1)
-                # save elementwise mse
-                loss.backward()
+                # calculate total loss: minimize XRD loss, maximize latent code probability (min neg prob)
+                total_loss = xrd_loss - l2_penalty * prob
+                # backprop through total loss
+                total_loss.backward()
                 opt.step()
                 if i == (num_gradient_steps-1):
+                    # TODO: speed this one up
                     crystals = model.langevin_dynamics(z, ld_kwargs)
                     crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
 
@@ -138,7 +141,7 @@ def main(args):
         loader = test_loader
     else:
         loader = None
-    optimization(model, ld_kwargs, loader)    
+    optimization(model, ld_kwargs, loader, l2_penalty=args.l2_penalty)    
 
 
 if __name__ == '__main__':
@@ -152,6 +155,7 @@ if __name__ == '__main__':
     parser.add_argument('--disable_bar', default=False, type=bool)
     parser.add_argument('--num_evals', default=1, type=int)
     parser.add_argument('--start_from', default='data', type=str)
+    parser.add_argument('--l2_penalty', default=1e-5, type=float)
     parser.add_argument('--label', default='')
 
     args = parser.parse_args()
