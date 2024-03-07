@@ -23,14 +23,14 @@ from visualization.visualize_materials import create_materials, augment_xrdStrip
 
 def optimization(model, ld_kwargs, data_loader,
                  num_starting_points=1000, num_gradient_steps=5000,
-                 lr=1e-3, k=10, l2_penalty=1e-5):
+                 lr=1e-3, k=10, l2_penalty=1e-5, label=''):
     assert data_loader is not None
 
-    opt_material_folder = f'materials_viz/test/opt_material'
-    opt_xrd_folder = f'materials_viz/test/opt_xrd'
-    gt_material_folder = f'materials_viz/test/base_truth_material'
-    gt_xrd_folder = f'materials_viz/test/base_truth_xrd'
-    metrics_folder = f'materials_viz/test/metrics'
+    opt_material_folder = f'materials_viz_{label}/test/opt_material'
+    opt_xrd_folder = f'materials_viz_{label}/test/opt_xrd'
+    gt_material_folder = f'materials_viz_{label}/test/base_truth_material'
+    gt_xrd_folder = f'materials_viz_{label}/test/base_truth_xrd'
+    metrics_folder = f'materials_viz_{label}/test/metrics'
     os.makedirs(opt_material_folder, exist_ok=True)
     os.makedirs(opt_xrd_folder, exist_ok=True)
     os.makedirs(gt_material_folder, exist_ok=True)
@@ -174,7 +174,8 @@ def main(args):
                  num_starting_points=args.num_starting_points,
                  num_gradient_steps=args.num_gradient_steps,
                  lr=args.lr,
-                 k=args.num_tested_materials)    
+                 k=args.num_tested_materials,
+                 label=args.label)    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
