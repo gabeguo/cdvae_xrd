@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import numpy as np
 from torch_geometric.data import Batch
 from torch_geometric.data import DataLoader
+from torch.distributions import MultivariateNormal
 
 
 from eval_utils import load_model
@@ -23,6 +24,8 @@ def optimization(model, ld_kwargs, data_loader,
                  num_starting_points=1000, num_gradient_steps=5000,
                  lr=1e-3, k=10):
     assert data_loader is not None
+
+    m = MultivariateNormal(torch.zeros(model.hparams.hidden_dim).cuda(), torch.eye(model.hparams.hidden_dim).cuda())
 
     j = 0
     for batch in data_loader:
@@ -42,7 +45,8 @@ def optimization(model, ld_kwargs, data_loader,
             for i in range(num_gradient_steps):
                 opt.zero_grad()
                 loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
-                pbar.set_postfix(loss=f"predicted property loss: {loss.item():.4f}", refresh=True)
+                prob = m.log_prob(z).mean()
+                pbar.set_postfix(loss=f"XRD loss: {loss.item():.3e}; Gaussian log PDF: {prob.item():.3e}", refresh=True)
                 # Update the progress bar by one step
                 pbar.update(1)
                 # save elementwise mse
