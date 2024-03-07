@@ -162,6 +162,14 @@ def plot_xrds(args, xrds, output_dir):
         plt.close()
     return
 
+def plot_xrd_single(args, curr_xrd, output_dir, idx):
+    assert curr_xrd.shape == (512,)
+    thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
+    plt.plot(thetas, curr_xrd)
+    plt.savefig(os.path.join(output_dir, f'material{idx}.png'))
+    plt.close()
+    return
+
 def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_idx=0):
     assert len(curr_atom_types) == len(curr_coords)
     assert len(curr_coords.shape) == 2 and curr_coords.shape[1] == 3
