@@ -38,17 +38,19 @@ def optimization(model, ld_kwargs, data_loader,
         target_noisy_xrd = batch.y.reshape(1, 512)
         opt = Adam([z], lr=lr)
         model.freeze()
-
-        for i in range(num_gradient_steps):
-            opt.zero_grad()
-            loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
-            print(f'predicted property loss: {loss.item()}')
-            # save elementwise mse
-            loss.backward()
-            opt.step()
-            if i == (num_gradient_steps-1):
-                crystals = model.langevin_dynamics(z, ld_kwargs)
-                crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
+        with tqdm(total=num_gradient_steps, desc="Property opt", unit="steps") as pbar:
+            for i in range(num_gradient_steps):
+                opt.zero_grad()
+                loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
+                pbar.set_postfix(loss=f"predicted property loss: {loss.item():.4f}", refresh=True)
+                # Update the progress bar by one step
+                pbar.update(1)
+                # save elementwise mse
+                loss.backward()
+                opt.step()
+                if i == (num_gradient_steps-1):
+                    crystals = model.langevin_dynamics(z, ld_kwargs)
+                    crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
 
         # convert crystals to xrds
         frac_coords = crystals['frac_coords']
