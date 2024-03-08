@@ -16,7 +16,12 @@ from cdvae.common.data_utils import (
     frac_to_cart_coords, min_distance_sqr_pbc)
 from cdvae.pl_modules.embeddings import MAX_ATOMIC_NUM
 from cdvae.pl_modules.embeddings import KHOT_EMBEDDINGS
-from cdvae.pl_modules.xrd import XRDRegressor
+from cdvae.pl_modules.xrd import XRDConvRegressor, XRDDenseRegressor
+
+xrd_arch = {
+    'conv': XRDConvRegressor,
+    'dense': XRDDenseRegressor,
+}
 
 def build_mlp(in_dim, hidden_dim, fc_num_layers, out_dim):
     mods = [nn.Linear(in_dim, hidden_dim), nn.ReLU()]
@@ -156,7 +161,7 @@ class CDVAE(BaseModule):
         assert self.hparams.data.prop == 'xrd'
         if self.hparams.predict_property:
             if self.hparams.data.prop == 'xrd':
-                self.fc_property = XRDRegressor()
+                self.fc_property = xrd_arch[self.hparams.prop_arch]()
             else:
                 raise ValueError('should be XRD')
                 self.fc_property = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,

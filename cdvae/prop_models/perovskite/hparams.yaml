@@ -11,7 +11,7 @@ data:
   max_atoms: 20
   otf_graph: false
   eval_model_name: perovskite
-  train_max_epochs: 3000
+  train_max_epochs: 100
   early_stopping_patience: 100000
   teacher_forcing_max_epoch: 1500
   datamodule:

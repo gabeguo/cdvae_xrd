@@ -21,7 +21,7 @@ type_sigma_begin: 5.
 type_sigma_end: 0.01
 num_noise_level: 50
 predict_property: False
-
+prop_arch: conv
 defaults:
   - encoder: dimenet
   - decoder: gemnet
