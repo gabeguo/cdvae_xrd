@@ -198,6 +198,7 @@ class GenEval(object):
             return {'wdist_prop': None}
 
     def get_coverage(self):
+        raise RuntimeError('should not be called')
         cutoff_dict = COV_Cutoffs[self.eval_model_name]
         (cov_metrics_dict, combined_dist_dict) = compute_cov(
             self.crys, self.gt_crys,

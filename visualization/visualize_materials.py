@@ -85,15 +85,17 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
         all_coords.append(np.array(curr_coords))
         all_atom_types.append(curr_atom_types)
     
+    truncated_crystals_list = crystals_list[:args.num_materials]
     assert len(all_coords) == len(all_atom_types)
     assert len(all_coords) == min(len(num_atoms), args.num_materials)
+    assert len(truncated_crystals_list) == len(all_coords)
 
     if create_xrd:
         assert len(all_coords) == len(all_xrds)
         all_xrds = torch.stack(all_xrds, dim=0).numpy()
         assert all_xrds.shape == (len(all_coords), 512)
 
-    return all_coords, all_atom_types, all_xrds
+    return all_coords, all_atom_types, all_xrds, truncated_crystals_list
 
 
 def augment_xrdStrip(curr_xrdStrip, horizontal_noise_range=(1e-2, 1.1e-2), vertical_noise=1e-3):
@@ -285,7 +287,7 @@ if __name__ == "__main__":
                 lengths = batched_lengths[i]
                 angles = batched_angles[i]
 
-                the_coords, atom_types, generated_xrds = create_materials(args, 
+                the_coords, atom_types, generated_xrds, crystals_list = create_materials(args, 
                         frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
                 plot_materials(args, the_coords, atom_types, curr_folder, i)
                 xrd_folder = os.path.join(args.results_folder, f"{'pred' if is_pred else 'gt'}_xrds")
@@ -337,7 +339,7 @@ if __name__ == "__main__":
             angles = batched_angles[i]
 
             # predictions
-            the_coords, atom_types, generated_xrds = create_materials(args, 
+            the_coords, atom_types, generated_xrds, crystals_list = create_materials(args, 
                     frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
 
             plot_materials(args, the_coords, atom_types, opt_materials_folder, i)
@@ -350,6 +352,6 @@ if __name__ == "__main__":
             plot_xrds(args, generated_xrds, pred_xrd_folder)
 
             # ground truth
-            the_coords, atom_types, generated_xrds = create_materials(args, 
+            the_coords, atom_types, generated_xrds, crystals_list = create_materials(args, 
                     base_truth_frac_coords, base_truth_num_atoms, base_truth_atom_types, base_truth_lengths, base_truth_angles, create_xrd=True)
             plot_materials(args, the_coords, atom_types, base_truth_folder, i)
