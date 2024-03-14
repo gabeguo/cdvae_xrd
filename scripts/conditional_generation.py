@@ -36,11 +36,16 @@ def optimization(model, ld_kwargs, data_loader,
                  lr=1e-3, k=10, l2_penalty=1e-5, label=''):
     assert data_loader is not None
 
-    opt_material_folder = f'materials_viz/{label}/opt_material'
-    opt_xrd_folder = f'materials_viz/{label}/opt_xrd'
-    gt_material_folder = f'materials_viz/{label}/base_truth_material'
-    gt_xrd_folder = f'materials_viz/{label}/base_truth_xrd'
-    metrics_folder = f'materials_viz/{label}/metrics'
+    base_output_dir = f'materials_viz/{label}'
+    os.makedirs(base_output_dir, exist_ok=True)
+    with open(os.path.join(base_output_dir, 'parameters.json'), 'w') as fout:
+        json.dump(args, fout, indent=4)
+
+    opt_material_folder = f'{base_output_dir}/opt_material'
+    opt_xrd_folder = f'{base_output_dir}/opt_xrd'
+    gt_material_folder = f'{base_output_dir}/base_truth_material'
+    gt_xrd_folder = f'{base_output_dir}/base_truth_xrd'
+    metrics_folder = f'{base_output_dir}/metrics'
     os.makedirs(opt_material_folder, exist_ok=True)
     os.makedirs(opt_xrd_folder, exist_ok=True)
     os.makedirs(gt_material_folder, exist_ok=True)
