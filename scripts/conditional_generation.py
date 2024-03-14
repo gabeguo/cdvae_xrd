@@ -39,7 +39,7 @@ def optimization(args, model, ld_kwargs, data_loader,
     base_output_dir = f'materials_viz/{label}'
     os.makedirs(base_output_dir, exist_ok=True)
     with open(os.path.join(base_output_dir, 'parameters.json'), 'w') as fout:
-        json.dump(args, fout, indent=4)
+        json.dump(vars(args), fout, indent=4)
 
     opt_material_folder = f'{base_output_dir}/opt_material'
     opt_xrd_folder = f'{base_output_dir}/opt_xrd'
