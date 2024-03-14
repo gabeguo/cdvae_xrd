@@ -31,7 +31,7 @@ STRUCTURE_VALIDITY = 'struct_valid'
 VALIDITY = 'valid'
 NUM_ATOM_ACCURACY = '% materials w/ # atoms pred correctly'
 
-def optimization(model, ld_kwargs, data_loader,
+def optimization(args, model, ld_kwargs, data_loader,
                  num_starting_points=1000, num_gradient_steps=5000,
                  lr=1e-3, k=10, l2_penalty=1e-5, label=''):
     assert data_loader is not None
@@ -261,7 +261,7 @@ def main(args):
         loader = test_loader
     else:
         loader = None
-    optimization(model, ld_kwargs, loader, 
+    optimization(args, model, ld_kwargs, loader, 
                  l2_penalty=args.l2_penalty, 
                  num_starting_points=args.num_starting_points,
                  num_gradient_steps=args.num_gradient_steps,
