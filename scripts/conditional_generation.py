@@ -21,6 +21,7 @@ from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
 from visualization.visualize_materials import create_materials, augment_xrdStrip, plot_material_single, plot_xrd_single
 from compute_metrics import Crystal, RecEval, GenEval
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 AVG_COMPOSITION_ERROR = 'composition error rate'
 AVG_XRD_MSE = 'Scaled XRD mean squared error'
@@ -75,6 +76,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         z.requires_grad = True
         target_noisy_xrd = batch.y.reshape(1, 512)
         opt = Adam([z], lr=lr)
+        scheduler = CosineAnnealingLR(opt, num_gradient_steps, eta_min=args.min_lr)
         model.freeze()
         with tqdm(total=num_gradient_steps, desc="Property opt", unit="steps") as pbar:
             for i in range(num_gradient_steps):
@@ -92,6 +94,7 @@ def optimization(args, model, ld_kwargs, data_loader,
                 # backprop through total loss
                 total_loss.backward()
                 opt.step()
+                scheduler.step()
                 if i == (num_gradient_steps-1):
                     # TODO: speed this one up
                     crystals = model.langevin_dynamics(z, ld_kwargs)
@@ -104,12 +107,15 @@ def optimization(args, model, ld_kwargs, data_loader,
         lengths = crystals['lengths']
         angles = crystals['angles']
 
+        use_l1_loss = args.l1_loss
+
         args = SimpleNamespace()
         args.wave_source = 'CuKa'
         args.num_materials = num_starting_points
         args.xrd_vector_dim = 512
         args.max_theta = 180
         args.min_theta = 0
+        args.l1_loss = use_l1_loss
 
         # predictions
         the_coords, atom_types, generated_xrds, curr_gen_crystals_list = create_materials(args, 
@@ -296,6 +302,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_starting_points', default=1000, type=int)
     parser.add_argument('--num_gradient_steps', default=5000, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
+    parser.add_argument('--min_lr', default=1e-5, type=float)
     parser.add_argument('--num_tested_materials', default=10, type=int)
     parser.add_argument('--l1_loss', action='store_true')
     parser.add_argument('--label', default='')
