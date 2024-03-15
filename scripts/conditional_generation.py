@@ -144,7 +144,7 @@ def optimization(args, model, ld_kwargs, data_loader,
                     wandb.log(
                         {
                             "total_loss":total_loss,
-                            "lr":lr,
+                            "lr":scheduler.get_last_lr()[0],
                             "xrd_loss":xrd_loss,
                             "log_prob":prob,
                             "num_atom_loss":num_atom_loss,
