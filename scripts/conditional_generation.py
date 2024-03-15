@@ -23,6 +23,8 @@ from visualization.visualize_materials import create_materials, augment_xrdStrip
 from compute_metrics import Crystal, RecEval, GenEval
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
+import wandb
+
 AVG_COMPOSITION_ERROR = 'composition error rate'
 AVG_XRD_MSE = 'Scaled XRD mean squared error'
 AVG_XRD_L1 = 'Scaled XRD mean absolute error'
@@ -32,6 +34,26 @@ COMPOSITION_VALIDITY = 'comp_valid'
 STRUCTURE_VALIDITY = 'struct_valid'
 VALIDITY = 'valid'
 NUM_ATOM_ACCURACY = '% materials w/ # atoms pred correctly'
+
+# Thanks ChatGPT!
+def calculate_accuracy(probabilities, labels):
+    """
+    Calculate accuracy given the softmax probabilities and true labels.
+    
+    :param probabilities: Softmax probabilities of shape (N, C) where N is the number of samples and C is the number of classes.
+    :param labels: True class labels of shape (N,).
+    :return: Accuracy as a Python float.
+    """
+    # Step 1: Convert softmax probabilities to predicted class indices
+    _, predicted_classes = torch.max(probabilities, dim=1)
+    
+    # Step 2: Compare with true class labels
+    correct_predictions = (predicted_classes == labels).float()  # Convert boolean tensor to float for sum operation
+    
+    # Step 3: Calculate accuracy
+    accuracy = correct_predictions.sum() / labels.size(0)
+    
+    return accuracy.item()  # Convert to Python float for readability
 
 def optimization(args, model, ld_kwargs, data_loader,
                  num_starting_points=1000, num_gradient_steps=5000,
@@ -65,6 +87,7 @@ def optimization(args, model, ld_kwargs, data_loader,
     total_correct_num_atoms = 0
 
     for j, batch in enumerate(data_loader):
+        wandb.init(config=args, project='conditional generation', group=f'crystal {j}')
         if j == k:
             break
         batch = batch.to(model.device)
@@ -74,12 +97,14 @@ def optimization(args, model, ld_kwargs, data_loader,
                         device=model.device)
         
         z.requires_grad = True
+        # get xrd
         target_noisy_xrd = batch.y.reshape(1, 512)
         opt = Adam([z], lr=lr)
         total_gradient_steps = num_gradient_steps * (1+2+4)
         scheduler = CosineAnnealingWarmRestarts(opt, num_gradient_steps, T_mult=2, eta_min=args.min_lr)
         model.freeze()
         with tqdm(total=total_gradient_steps, desc="Property opt", unit="steps") as pbar:
+            # TODO: add model.fc_num_atoms, model.fc_composition, model.fc_lattice
             for i in range(total_gradient_steps):
                 opt.zero_grad()
                 if args.l1_loss:
@@ -87,11 +112,48 @@ def optimization(args, model, ld_kwargs, data_loader,
                 else:
                     xrd_loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
                 prob = m.log_prob(z).mean()
-                pbar.set_postfix(loss=f"XRD loss: {xrd_loss.item():.3e}; Gaussian log PDF: {prob.item():.3e}", refresh=True)
+                # predict the number of atoms, lattice, composition
+                (pred_num_atoms, pred_lengths_and_angles, pred_lengths, pred_angles,
+                pred_composition_per_atom) = model.decode_stats(
+                    z, batch.num_atoms, batch.lengths, batch.angles, teacher_forcing=False)
+                # print('pred vs gt num atoms', pred_num_atoms.shape, 
+                #       batch.num_atoms.repeat(num_starting_points).shape)
+                # print('pred vs gt lattice', pred_lengths_and_angles.shape, torch.cat((batch.lengths, batch.angles), dim=1).repeat(num_starting_points, 1).shape)
+                # print('pred vs gt composition', pred_composition_per_atom.shape, 
+                #       batch.atom_types.repeat(num_starting_points).shape)
+                # Need to repeat, because we have multiple starting points
+                num_atom_loss = F.cross_entropy(pred_num_atoms, 
+                                                batch.num_atoms.repeat(num_starting_points))
+                # lattice_loss = model.lattice_loss(pred_lengths_and_angles, batch)
+                # TODO: they do some weird stuff with composition loss: double check
+                composition_loss = F.cross_entropy(pred_composition_per_atom, 
+                                                   (batch.atom_types - 1).repeat(num_starting_points))
+                num_atom_accuracy = calculate_accuracy(pred_num_atoms, batch.num_atoms.repeat(num_starting_points))
+                composition_accuracy = calculate_accuracy(pred_composition_per_atom, (batch.atom_types - 1).repeat(num_starting_points))
+                pbar.set_postfix_str(f"XRD loss: {xrd_loss.item():.3e}; Gaussian log PDF: {prob.item():.3e}; " + 
+                                     f"Num atom loss: {num_atom_loss.item():.3e}; Composition loss: {composition_loss.item():.3e}", 
+                                     refresh=True)
                 # Update the progress bar by one step
                 pbar.update(1)
                 # calculate total loss: minimize XRD loss, maximize latent code probability (min neg prob)
-                total_loss = xrd_loss - l2_penalty * prob
+                total_loss = xrd_loss - l2_penalty * prob \
+                    + args.num_atom_lambda * num_atom_loss \
+                    + args.composition_lambda * composition_loss
+
+                if i % 100 == 0 and i > 0:
+                    wandb.log(
+                        {
+                            "total_loss":total_loss,
+                            "lr":lr,
+                            "xrd_loss":xrd_loss,
+                            "log_prob":prob,
+                            "num_atom_loss":num_atom_loss,
+                            "composition_loss":composition_loss,
+                            "num_atom_accuracy":num_atom_accuracy,
+                            "composition_accuracy":composition_accuracy
+                        },
+                    step=i)
+
                 # backprop through total loss
                 total_loss.backward()
                 opt.step()
@@ -107,8 +169,6 @@ def optimization(args, model, ld_kwargs, data_loader,
         atom_types = crystals['atom_types']
         lengths = crystals['lengths']
         angles = crystals['angles']
-
-        use_l1_loss = args.l1_loss
 
         alt_args = SimpleNamespace()
         alt_args.wave_source = 'CuKa'
@@ -144,7 +204,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         curr_pred_crystal = Crystal(curr_gen_crystals_list[min_loss_idx])
         # save the optimal crystal and its xrd
         plot_material_single(opt_coords, opt_atom_types, opt_material_folder, idx=j)
-        plot_xrd_single(args, opt_xrd, opt_xrd_folder, idx=j)
+        plot_xrd_single(alt_args, opt_xrd, opt_xrd_folder, idx=j)
 
         # plot base truth
         frac_coords = batch.frac_coords
@@ -153,15 +213,10 @@ def optimization(args, model, ld_kwargs, data_loader,
         lengths = batch.lengths
         angles = batch.angles
 
-        # print('frac coords:', frac_coords.shape)
-        # print('num atoms:', num_atoms.shape)
-        # print('atom types:', atom_types.shape)
-        # print('lengths:', lengths.shape)
-        # print('angles:', angles.shape)
         assert num_atoms.shape[0] == 1
         assert frac_coords.shape[0] == atom_types.shape[0]
 
-        the_coords, atom_types, generated_xrds, singleton_gt_crystal_list = create_materials(args, 
+        the_coords, atom_types, generated_xrds, singleton_gt_crystal_list = create_materials(alt_args, 
                 frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
         the_coords = np.array(the_coords)[0]
         atom_types = np.array(atom_types)[0]
@@ -171,7 +226,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         curr_gt_crystal = Crystal(singleton_gt_crystal_list[0])
 
         plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
-        plot_xrd_single(args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
+        plot_xrd_single(alt_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
 
         # metrics
         assert target_noisy_xrd.squeeze().shape == input[min_loss_idx].squeeze().shape
@@ -299,6 +354,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_evals', default=1, type=int)
     parser.add_argument('--start_from', default='data', type=str)
     parser.add_argument('--l2_penalty', default=1e-5, type=float)
+    parser.add_argument('--num_atom_lambda', default=1e-3, type=float)
+    parser.add_argument('--lattice_lambda', default=1e-3, type=float)
+    parser.add_argument('--composition_lambda', default=1e-3, type=float)
     parser.add_argument('--num_starting_points', default=1000, type=int)
     parser.add_argument('--num_gradient_steps', default=5000, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
