@@ -6,5 +6,5 @@ python -W ignore conditional_generation.py \
     --l2_penalty 5e-5 \
     --num_tested_materials 10 \
     --label mp_20 \
-    --num_gradient_steps 20000 \
+    --num_gradient_steps 5000 \
     --l1_loss

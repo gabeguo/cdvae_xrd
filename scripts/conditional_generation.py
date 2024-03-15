@@ -21,7 +21,7 @@ from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
 from visualization.visualize_materials import create_materials, augment_xrdStrip, plot_material_single, plot_xrd_single
 from compute_metrics import Crystal, RecEval, GenEval
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
 AVG_COMPOSITION_ERROR = 'composition error rate'
 AVG_XRD_MSE = 'Scaled XRD mean squared error'
@@ -76,10 +76,11 @@ def optimization(args, model, ld_kwargs, data_loader,
         z.requires_grad = True
         target_noisy_xrd = batch.y.reshape(1, 512)
         opt = Adam([z], lr=lr)
-        scheduler = CosineAnnealingLR(opt, num_gradient_steps, eta_min=args.min_lr)
+        total_gradient_steps = num_gradient_steps * (1+2+4)
+        scheduler = CosineAnnealingWarmRestarts(opt, num_gradient_steps, T_mult=2, eta_min=args.min_lr)
         model.freeze()
-        with tqdm(total=num_gradient_steps, desc="Property opt", unit="steps") as pbar:
-            for i in range(num_gradient_steps):
+        with tqdm(total=total_gradient_steps, desc="Property opt", unit="steps") as pbar:
+            for i in range(total_gradient_steps):
                 opt.zero_grad()
                 if args.l1_loss:
                     xrd_loss = F.l1_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
@@ -95,10 +96,10 @@ def optimization(args, model, ld_kwargs, data_loader,
                 total_loss.backward()
                 opt.step()
                 scheduler.step()
-                if i == (num_gradient_steps-1):
-                    # TODO: speed this one up
-                    crystals = model.langevin_dynamics(z, ld_kwargs)
-                    crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
+
+        # TODO: speed this one up
+        crystals = model.langevin_dynamics(z, ld_kwargs)
+        crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
 
         # convert crystals to xrds
         frac_coords = crystals['frac_coords']
