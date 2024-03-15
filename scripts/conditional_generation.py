@@ -110,16 +110,15 @@ def optimization(args, model, ld_kwargs, data_loader,
 
         use_l1_loss = args.l1_loss
 
-        args = SimpleNamespace()
-        args.wave_source = 'CuKa'
-        args.num_materials = num_starting_points
-        args.xrd_vector_dim = 512
-        args.max_theta = 180
-        args.min_theta = 0
-        args.l1_loss = use_l1_loss
+        alt_args = SimpleNamespace()
+        alt_args.wave_source = 'CuKa'
+        alt_args.num_materials = num_starting_points
+        alt_args.xrd_vector_dim = 512
+        alt_args.max_theta = 180
+        alt_args.min_theta = 0
 
         # predictions
-        the_coords, atom_types, generated_xrds, curr_gen_crystals_list = create_materials(args, 
+        the_coords, atom_types, generated_xrds, curr_gen_crystals_list = create_materials(alt_args, 
                 frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
 
         # apply smoothing to the XRD patterns
