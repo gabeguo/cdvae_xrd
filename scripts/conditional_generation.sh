@@ -4,7 +4,7 @@ python -W ignore conditional_generation.py \
     --lr 0.1 \
     --min_lr 0.001 \
     --l2_penalty 5e-5 \
-    --num_tested_materials 10 \
+    --num_tested_materials 20 \
     --label mp_20 \
     --num_gradient_steps 5000 \
     --l1_loss
