@@ -24,6 +24,7 @@ from compute_metrics import Crystal, RecEval, GenEval
 
 AVG_COMPOSITION_ERROR = 'composition error rate'
 AVG_XRD_MSE = 'Scaled XRD mean squared error'
+AVG_XRD_L1 = 'Scaled XRD mean absolute error'
 MATCH_RATE = 'match_rate'
 RMS_DIST = 'rms_dist'
 COMPOSITION_VALIDITY = 'comp_valid'
@@ -58,7 +59,8 @@ def optimization(args, model, ld_kwargs, data_loader,
     all_bestPred_crystals = list()
 
     all_composition_errors = list()
-    all_xrd_errors = list()
+    all_xrd_l1_errors = list()
+    all_xrd_l2_errors = list()
     total_correct_num_atoms = 0
 
     for j, batch in enumerate(data_loader):
@@ -77,7 +79,10 @@ def optimization(args, model, ld_kwargs, data_loader,
         with tqdm(total=num_gradient_steps, desc="Property opt", unit="steps") as pbar:
             for i in range(num_gradient_steps):
                 opt.zero_grad()
-                xrd_loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
+                if args.l1_loss:
+                    xrd_loss = F.l1_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
+                else:
+                    xrd_loss = F.mse_loss(model.fc_property(z), target_noisy_xrd.broadcast_to(z.shape[0], 512))
                 prob = m.log_prob(z).mean()
                 pbar.set_postfix(loss=f"XRD loss: {xrd_loss.item():.3e}; Gaussian log PDF: {prob.item():.3e}", refresh=True)
                 # Update the progress bar by one step
@@ -120,7 +125,10 @@ def optimization(args, model, ld_kwargs, data_loader,
         # compute loss on desired and generated xrds
         target = target_noisy_xrd.broadcast_to(generated_xrds.shape[0], 512)
         input = torch.tensor(generated_xrds).to(model.device)
-        loss = F.mse_loss(input, target, reduction='none').mean(dim=-1)
+        if args.l1_loss:
+            loss = F.l1_loss(input, target, reduction='none').mean(dim=-1)
+        else:
+            loss = F.mse_loss(input, target, reduction='none').mean(dim=-1)
         # find the minimum loss element
         min_loss_idx = torch.argmin(loss)
         # construct the corresponding crystal
@@ -161,9 +169,12 @@ def optimization(args, model, ld_kwargs, data_loader,
 
         # metrics
         assert target_noisy_xrd.squeeze().shape == input[min_loss_idx].squeeze().shape
-        xrd_error = F.mse_loss(target_noisy_xrd.squeeze(), input[min_loss_idx].squeeze()).item()
-        all_xrd_errors.append(xrd_error)
-        print(f'xrd_error: {xrd_error}')
+        xrd_l1_error = F.l1_loss(target_noisy_xrd.squeeze(), input[min_loss_idx].squeeze()).item()
+        xrd_l2_error = F.mse_loss(target_noisy_xrd.squeeze(), input[min_loss_idx].squeeze()).item()
+        all_xrd_l1_errors.append(xrd_l1_error)
+        all_xrd_l2_errors.append(xrd_l2_error)
+        print(f'xrd l1 error: {xrd_l1_error}')
+        print(f'xrd l2 error: {xrd_l2_error}')
 
         composition_error = compare_composition(atom_types, opt_atom_types)
         all_composition_errors.append(composition_error)
@@ -181,7 +192,8 @@ def optimization(args, model, ld_kwargs, data_loader,
 
     ret_val = {
         AVG_COMPOSITION_ERROR: np.mean(all_composition_errors),
-        AVG_XRD_MSE: np.mean(all_xrd_errors),
+        AVG_XRD_MSE: np.mean(all_xrd_l2_errors),
+        AVG_XRD_L1: np.mean(all_xrd_l1_errors)
     }
     ret_val.update(check_structure_match(gt_structures=all_gt_crystals, 
                                          pred_structures=all_bestPred_crystals))
@@ -285,6 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_gradient_steps', default=5000, type=int)
     parser.add_argument('--lr', default=1e-3, type=float)
     parser.add_argument('--num_tested_materials', default=10, type=int)
+    parser.add_argument('--l1_loss', action='store_true')
     parser.add_argument('--label', default='')
 
     args = parser.parse_args()
