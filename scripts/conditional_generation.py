@@ -100,7 +100,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         # get xrd
         target_noisy_xrd = batch.y.reshape(1, 512)
         opt = Adam([z], lr=lr)
-        total_gradient_steps = num_gradient_steps * (1+2+4)
+        total_gradient_steps = num_gradient_steps * (1+2+4) - 1
         scheduler = CosineAnnealingWarmRestarts(opt, num_gradient_steps, T_mult=2, eta_min=args.min_lr)
         model.freeze()
         with tqdm(total=total_gradient_steps, desc="Property opt", unit="steps") as pbar:
@@ -158,6 +158,8 @@ def optimization(args, model, ld_kwargs, data_loader,
                 total_loss.backward()
                 opt.step()
                 scheduler.step()
+
+        wandb.finish()
 
         # TODO: speed this one up
         crystals = model.langevin_dynamics(z, ld_kwargs)
