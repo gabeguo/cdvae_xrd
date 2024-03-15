@@ -87,7 +87,7 @@ def optimization(args, model, ld_kwargs, data_loader,
     total_correct_num_atoms = 0
 
     for j, batch in enumerate(data_loader):
-        wandb.init(config=args, project='conditional generation', group=f'crystal {j}')
+        wandb.init(config=args, project='conditional generation', name=label, group=f'crystal {j}')
         if j == k:
             break
         batch = batch.to(model.device)
@@ -125,7 +125,7 @@ def optimization(args, model, ld_kwargs, data_loader,
                 num_atom_loss = F.cross_entropy(pred_num_atoms, 
                                                 batch.num_atoms.repeat(num_starting_points))
                 # lattice_loss = model.lattice_loss(pred_lengths_and_angles, batch)
-                # TODO: they do some weird stuff with composition loss: double check
+                # TODO: they do some weird stuff with composition loss: double check (I think it was inconsequential, but idk)
                 composition_loss = F.cross_entropy(pred_composition_per_atom, 
                                                    (batch.atom_types - 1).repeat(num_starting_points))
                 num_atom_accuracy = calculate_accuracy(pred_num_atoms, batch.num_atoms.repeat(num_starting_points))
