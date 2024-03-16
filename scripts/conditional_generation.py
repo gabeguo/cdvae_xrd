@@ -169,6 +169,9 @@ def optimization(args, model, ld_kwargs, data_loader,
         init_atom_types = batch.atom_types.repeat(num_starting_points) if args.composition_lambda > EPS \
             else None
 
+        print('know num atoms:', init_num_atoms is not None)
+        print('know atom types:', init_atom_types is not None)
+
         crystals = model.langevin_dynamics(z, ld_kwargs, gt_num_atoms=init_num_atoms, gt_atom_types=init_atom_types)
         crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
 
