@@ -25,6 +25,8 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmResta
 
 import wandb
 
+from PIL import Image
+
 AVG_COMPOSITION_ERROR = 'composition error rate'
 AVG_XRD_MSE = 'Scaled XRD mean squared error'
 AVG_XRD_L1 = 'Scaled XRD mean absolute error'
@@ -36,6 +38,32 @@ VALIDITY = 'valid'
 NUM_ATOM_ACCURACY = '% materials w/ # atoms pred correctly'
 
 EPS = 1e-10
+
+# Thanks ChatGPT!
+def resize_image_to_same_width(image, width):
+    """Resize an image to the same width, maintaining the aspect ratio."""
+    ratio = width / float(image.width)
+    new_height = int(image.height * ratio)
+    return image.resize((width, new_height), Image.LANCZOS)
+
+def collate_images(gt_material, gt_xrd, pred_material, pred_xrd, width):
+    gt_material = resize_image_to_same_width(Image.open(gt_material), width)
+    gt_xrd = resize_image_to_same_width(Image.open(gt_xrd), width)
+    pred_material = resize_image_to_same_width(Image.open(pred_material), width)
+    pred_xrd = resize_image_to_same_width(Image.open(pred_xrd), width)
+
+    assert gt_material.height == pred_material.height
+    assert gt_xrd.height == pred_xrd.height
+    
+    total_height = gt_material.height + gt_xrd.height
+    combined_image = Image.new('RGB', (width * 2, total_height))
+    
+    combined_image.paste(gt_material, (0, 0))
+    combined_image.paste(gt_xrd, (0, gt_material.height))
+    combined_image.paste(pred_material, (width, 0))
+    combined_image.paste(pred_xrd, (width, pred_material.height))
+    
+    return combined_image
 
 # Thanks ChatGPT!
 def calculate_accuracy(probabilities, labels):
@@ -161,8 +189,6 @@ def optimization(args, model, ld_kwargs, data_loader,
                 opt.step()
                 scheduler.step()
 
-        wandb.finish()
-
         # TODO: speed this one up
         init_num_atoms = batch.num_atoms.repeat(num_starting_points) if args.num_atom_lambda > EPS \
             else None
@@ -218,8 +244,8 @@ def optimization(args, model, ld_kwargs, data_loader,
         pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder, idx=j)
         pred_xrd_filepath = plot_xrd_single(alt_args, opt_xrd, opt_xrd_folder, idx=j)
 
-        wandb.log({"predicted crystal": wandb.Image(pred_material_filepath)})
-        wandb.log({"predicted xrd": wandb.Image(pred_xrd_filepath)})
+        # wandb.log({"predicted crystal": wandb.Image(pred_material_filepath)})
+        # wandb.log({"predicted xrd": wandb.Image(pred_xrd_filepath)})
 
         # plot base truth
         frac_coords = batch.frac_coords
@@ -243,8 +269,16 @@ def optimization(args, model, ld_kwargs, data_loader,
         gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
         gt_xrd_filepath = plot_xrd_single(alt_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
 
-        wandb.log({"gt crystal": wandb.Image(gt_material_filepath)})
-        wandb.log({"gt xrd": wandb.Image(gt_xrd_filepath)})        
+        # wandb.log({"gt crystal": wandb.Image(gt_material_filepath)})
+        # wandb.log({"gt xrd": wandb.Image(gt_xrd_filepath)})     
+
+        # Log image
+        log_img = collate_images(gt_material=gt_material_filepath, gt_xrd=gt_xrd_filepath,
+                                 pred_material=pred_material_filepath, pred_xrd=pred_xrd_filepath,
+                                 width=600)
+        wandb.log({"prediction": wandb.Image(log_img)})  
+
+        wandb.finish() 
 
         # metrics
         assert target_noisy_xrd.squeeze().shape == input[min_loss_idx].squeeze().shape
