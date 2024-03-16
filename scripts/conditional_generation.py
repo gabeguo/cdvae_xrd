@@ -35,6 +35,8 @@ STRUCTURE_VALIDITY = 'struct_valid'
 VALIDITY = 'valid'
 NUM_ATOM_ACCURACY = '% materials w/ # atoms pred correctly'
 
+EPS = 1e-10
+
 # Thanks ChatGPT!
 def calculate_accuracy(probabilities, labels):
     """
@@ -162,7 +164,12 @@ def optimization(args, model, ld_kwargs, data_loader,
         wandb.finish()
 
         # TODO: speed this one up
-        crystals = model.langevin_dynamics(z, ld_kwargs)
+        init_num_atoms = batch.num_atoms.repeat(num_starting_points) if args.num_atom_lambda > EPS \
+            else None
+        init_atom_types = batch.atom_types.repeat(num_starting_points) if args.composition_lambda > EPS \
+            else None
+
+        crystals = model.langevin_dynamics(z, ld_kwargs, gt_num_atoms=init_num_atoms, gt_atom_types=init_atom_types)
         crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
 
         # convert crystals to xrds
