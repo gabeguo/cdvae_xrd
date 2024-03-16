@@ -215,8 +215,11 @@ def optimization(args, model, ld_kwargs, data_loader,
         opt_xrd = input[min_loss_idx, :].cpu().numpy()
         curr_pred_crystal = Crystal(curr_gen_crystals_list[min_loss_idx])
         # save the optimal crystal and its xrd
-        plot_material_single(opt_coords, opt_atom_types, opt_material_folder, idx=j)
-        plot_xrd_single(alt_args, opt_xrd, opt_xrd_folder, idx=j)
+        pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder, idx=j)
+        pred_xrd_filepath = plot_xrd_single(alt_args, opt_xrd, opt_xrd_folder, idx=j)
+
+        wandb.log({"predicted crystal": wandb.Image(pred_material_filepath)})
+        wandb.log({"predicted xrd": wandb.Image(pred_xrd_filepath)})
 
         # plot base truth
         frac_coords = batch.frac_coords
@@ -237,8 +240,11 @@ def optimization(args, model, ld_kwargs, data_loader,
 
         curr_gt_crystal = Crystal(singleton_gt_crystal_list[0])
 
-        plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
-        plot_xrd_single(alt_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
+        gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
+        gt_xrd_filepath = plot_xrd_single(alt_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
+
+        wandb.log({"gt crystal": wandb.Image(gt_material_filepath)})
+        wandb.log({"gt xrd": wandb.Image(gt_xrd_filepath)})        
 
         # metrics
         assert target_noisy_xrd.squeeze().shape == input[min_loss_idx].squeeze().shape

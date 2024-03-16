@@ -168,9 +168,10 @@ def plot_xrd_single(args, curr_xrd, output_dir, idx):
     assert curr_xrd.shape == (512,)
     thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
     plt.plot(thetas, curr_xrd)
-    plt.savefig(os.path.join(output_dir, f'material{idx}.png'))
+    img_path = os.path.join(output_dir, f'material{idx}.png')
+    plt.savefig(img_path)
     plt.close()
-    return
+    return img_path
 
 def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_idx=0):
     assert len(curr_atom_types) == len(curr_coords)
@@ -227,9 +228,10 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_
         scene_aspectmode='data'
     )
 
-    fig.write_image(os.path.join(output_dir, f'material{idx}_sample{batch_idx}.png'))
+    img_path = os.path.join(output_dir, f'material{idx}_sample{batch_idx}.png')
+    fig.write_image(img_path)
 
-    return
+    return img_path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
