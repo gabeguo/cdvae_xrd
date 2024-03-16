@@ -39,7 +39,14 @@ class XRDDenseRegressor(nn.Module):
 
         self.num_blocks = num_blocks
 
-        self.high_dim_proj = nn.Linear(latent_dim, xrd_dim)
+        self.high_dim_proj = nn.Sequential(
+            nn.Linear(latent_dim, xrd_dim),
+            nn.BatchNorm1d(num_features=xrd_dim),
+            nn.ReLU(),
+            nn.Linear(xrd_dim, xrd_dim),
+            nn.BatchNorm1d(num_features=xrd_dim),
+            nn.ReLU()
+        )
 
         self.first_conv = nn.Sequential(
             nn.Conv1d(in_channels=1, out_channels=8, kernel_size=3, padding=1, bias=False),
