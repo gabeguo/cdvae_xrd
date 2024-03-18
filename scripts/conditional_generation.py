@@ -117,7 +117,7 @@ def optimization(args, model, ld_kwargs, data_loader,
     total_correct_num_atoms = 0
 
     for j, batch in enumerate(data_loader):
-        wandb.init(config=args, project='conditional generation', name=label, group=f'crystal {j}')
+        wandb.init(config=args, project='new conditional generation', name=f'crystal {j}', group=label)
         if j == k:
             break
         batch = batch.to(model.device)
