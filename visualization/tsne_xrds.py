@@ -71,17 +71,17 @@ if __name__ == "__main__":
 
     parser.add_argument(
         '--model_path',
-        default='/home/gabeguo/hydra/singlerun/2024-03-01/perov_standardized',
+        default='/home/gabeguo/hydra/singlerun/2024-03-18/mp20_sharpXRD',
         type=str,
     )
     parser.add_argument(
         '--data_dir',
-        default='/home/gabeguo/cdvae_xrd/data/perov_5',
+        default='/home/gabeguo/cdvae_xrd/data/mp_20',
         type=str,
     )
     parser.add_argument(
         '--batch_size',
-        default=256,
+        default=8,
         type=int,
     )
     parser.add_argument(
@@ -113,6 +113,7 @@ if __name__ == "__main__":
     for idx, batch in enumerate(data_loader):
         batch = next(iter(data_loader)).to(model.device)
         _, _, z = model.encode(batch)
+        z = z.detach()
         scaled_xrds = batch.y.reshape(-1, 512)
         # inverse transform
         # model.scaler.match_device(scaled_xrds)
@@ -120,6 +121,7 @@ if __name__ == "__main__":
         xrds = scaled_xrds
 
         # plot XRDs
+        print('plotting XRDs')
         if idx == 0:
             pred_xrds = model.fc_property(z)
             # pred_xrds = model.scaler.inverse_transform(pred_xrds)
@@ -143,4 +145,4 @@ if __name__ == "__main__":
     assert Z.shape == (X.shape[0], 256)
     assert X.shape == (Z.shape[0], 512)
 
-    tsne(args, X=X, Z=Z)
+    # tsne(args, X=X, Z=Z)
