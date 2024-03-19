@@ -164,16 +164,17 @@ def plot_xrds(args, xrds, output_dir):
         plt.close()
     return
 
-def plot_xrd_single(args, curr_xrd, output_dir, idx):
+def plot_xrd_single(args, curr_xrd, output_dir, idx, filename=None):
     assert curr_xrd.shape == (512,)
     thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
     plt.plot(thetas, curr_xrd)
-    img_path = os.path.join(output_dir, f'material{idx}.png')
+    filename = filename if filename is not None else f'material{idx}.png'
+    img_path = os.path.join(output_dir, filename)
     plt.savefig(img_path)
     plt.close()
     return img_path
 
-def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_idx=0):
+def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_idx=0, filename=None):
     assert len(curr_atom_types) == len(curr_coords)
     assert len(curr_coords.shape) == 2 and curr_coords.shape[1] == 3
 
@@ -228,7 +229,8 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_
         scene_aspectmode='data'
     )
 
-    img_path = os.path.join(output_dir, f'material{idx}_sample{batch_idx}.png')
+    filename = filename if filename is not None else f'material{idx}_sample{batch_idx}.png'
+    img_path = os.path.join(output_dir, filename)
     fig.write_image(img_path)
 
     return img_path
