@@ -16,10 +16,8 @@ from torch.distributions import MultivariateNormal
 
 
 from eval_utils import load_model
-from cdvae.pl_modules.xrd import XRDEncoder
-from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
-from visualization.visualize_materials import create_materials, augment_xrdStrip, plot_material_single, plot_xrd_single
+from visualization.visualize_materials import create_materials, plot_material_single, plot_xrd_single
 from compute_metrics import Crystal, RecEval, GenEval
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
@@ -222,7 +220,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         # apply smoothing to the XRD patterns
         smoothed_xrds = list()
         for i in range(generated_xrds.shape[0]):
-            smoothed_xrd = augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
+            smoothed_xrd = data_loader.dataset.augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
             smoothed_xrds.append(smoothed_xrd)
         generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
 
