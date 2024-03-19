@@ -16,10 +16,8 @@ from torch.distributions import MultivariateNormal
 
 
 from eval_utils import load_model
-from cdvae.pl_modules.xrd import XRDEncoder
-from cdvae.pl_data.dataset import CrystXRDDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
-from visualization.visualize_materials import create_materials, augment_xrdStrip, plot_material_single, plot_xrd_single
+from visualization.visualize_materials import create_materials, plot_material_single, plot_xrd_single, augment_xrdStrip
 from compute_metrics import Crystal, RecEval, GenEval
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
@@ -120,7 +118,7 @@ def optimization(args, model, ld_kwargs, data_loader,
     total_correct_num_atoms = 0
 
     for j, batch in enumerate(data_loader):
-        wandb.init(config=args, project='conditional generation', name=label, group=f'crystal {j}')
+        wandb.init(config=args, project='new conditional generation', name=f'crystal {j}', group=label)
         if j == k:
             break
         batch = batch.to(model.device)
@@ -217,6 +215,15 @@ def optimization(args, model, ld_kwargs, data_loader,
         atom_types = crystals['atom_types']
         lengths = crystals['lengths']
         angles = crystals['angles']
+        the_coords, atom_types, generated_xrds, curr_gen_crystals_list = create_materials(alt_args, 
+                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
+
+        # apply smoothing to the XRD patterns
+        smoothed_xrds = list()
+        for i in range(generated_xrds.shape[0]):
+            smoothed_xrd = data_loader.dataset.augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
+            smoothed_xrds.append(smoothed_xrd)
+        generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
 
         all_opt_coords, all_opt_atom_types, opt_generated_xrds, curr_gen_crystals_list = create_materials(alt_args, 
                 frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)

@@ -479,7 +479,7 @@ class CDVAE(BaseModule):
         pred = self.fc_property(z)
         y = batch.y.reshape(pred.shape[0], -1)
         assert pred.shape == y.shape
-        return F.mse_loss(pred, y)
+        return F.l1_loss(pred, y)
 
     def lattice_loss(self, pred_lengths_and_angles, batch):
         self.lattice_scaler.match_device(pred_lengths_and_angles)

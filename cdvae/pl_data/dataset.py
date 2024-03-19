@@ -21,7 +21,7 @@ class CrystDataset(Dataset):
                  prop: ValueNode, niggli: ValueNode, primitive: ValueNode,
                  graph_method: ValueNode, preprocess_workers: ValueNode,
                  lattice_scale_method: ValueNode,
-                 horizontal_noise_range=(1e-2, 1.1e-2),
+                 horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
                  vertical_noise=1e-3,
                  **kwargs):
         super().__init__()
@@ -115,109 +115,6 @@ class CrystDataset(Dataset):
 
     def __repr__(self) -> str:
         return f"CrystDataset({self.name=}, {self.path=})"
-
-
-class CrystXRDDataset(Dataset):
-    def __init__(self, 
-                 data_path,
-                 filename,
-                 prop='heat_ref',
-                 niggli=True, 
-                 primitive=False,
-                 graph_method='crystalnn', 
-                 preprocess_workers=30,
-                 lattice_scale_method='scale_length',
-                 horizontal_noise_range=(1e-3, 1e-2),
-                 vertical_noise=1e-2,
-                 xrd_dim=512,
-                 **kwargs):
-
-        super().__init__()
-        self.molecule_data_path = os.path.join(data_path, filename)
-        self.xrd_data_path = os.path.join(data_path, os.path.join('xrd',filename.replace('.csv', '.pt')))
-        self.prop = prop
-        self.niggli = niggli
-        self.primitive = primitive
-        self.graph_method = graph_method
-        self.lattice_scale_method = lattice_scale_method
-        
-        self.xrd_dim = xrd_dim
-
-        assert (horizontal_noise_range is None) or (len(horizontal_noise_range) == 2 and horizontal_noise_range[0] <= horizontal_noise_range[1])
-        self.horizontal_noise_range = horizontal_noise_range
-        self.vertical_noise = vertical_noise
-
-        self.cached_data = preprocess(
-            self.molecule_data_path,
-            preprocess_workers,
-            niggli=self.niggli,
-            primitive=self.primitive,
-            graph_method=self.graph_method,
-            prop_list=[prop])
-        
-        self.xrd_data = torch.load(self.xrd_data_path)
-
-        add_scaled_lattice_prop(self.cached_data, lattice_scale_method)
-        self.lattice_scaler = None
-        self.scaler = None
-
-    def __len__(self) -> int:
-        return len(self.cached_data)
-
-    def __getitem__(self, index):
-        data_dict = self.cached_data[index]
-
-        # scaler is set in DataModule set stage
-        prop = self.scaler.transform(data_dict[self.prop])
-        (frac_coords, atom_types, lengths, angles, edge_indices,
-         to_jimages, num_atoms) = data_dict['graph_arrays']
-
-        # atom_coords are fractional coordinates
-        # edge_index is incremented during batching
-        # https://pytorch-geometric.readthedocs.io/en/latest/notes/batching.html
-        data = Data(
-            frac_coords=torch.Tensor(frac_coords),
-            atom_types=torch.LongTensor(atom_types),
-            lengths=torch.Tensor(lengths).view(1, -1),
-            angles=torch.Tensor(angles).view(1, -1),
-            edge_index=torch.LongTensor(
-                edge_indices.T).contiguous(),  # shape (2, num_edges)
-            to_jimages=torch.LongTensor(to_jimages),
-            num_atoms=num_atoms,
-            num_bonds=edge_indices.shape[0],
-            num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=prop.view(1, -1),
-        )
-
-        # fetch xrd data
-        xrd_data = self.xrd_data[index]
-        # add peak broadening
-        if (self.horizontal_noise_range is not None) and (self.vertical_noise is not None):
-            xrd_data = self.augment_xrdStrip(xrd_data)
-        return data, xrd_data
-
-    def augment_xrdStrip(self, curr_xrdStrip):
-        """
-        Augments curr_xrdStrip via:
-        -> Adding Gaussian peak broadening (horizontal)
-        -> Adding small Gaussian perturbations to peaks (vertical)
-        """
-        xrd = curr_xrdStrip.numpy()
-        # Peak broadening
-        filtered = gaussian_filter1d(xrd,
-                    sigma=np.random.uniform(
-                        low=self.xrd_dim * self.horizontal_noise_range[0], 
-                        high=self.xrd_dim * self.horizontal_noise_range[1]
-                    ), 
-                    mode='constant', cval=0)
-        filtered = filtered / np.max(filtered)
-        filtered = torch.from_numpy(filtered)
-        assert filtered.shape == curr_xrdStrip.shape
-        # Perturbation
-        perturbed = filtered + torch.normal(mean=0, std=self.vertical_noise, size=filtered.size())
-        perturbed = torch.maximum(perturbed, torch.zeros_like(perturbed))
-        perturbed = torch.minimum(perturbed, torch.ones_like(perturbed)) # band-pass filter
-        return perturbed
         
 class TensorCrystDataset(Dataset):
     def __init__(self, crystal_array_list, niggli, primitive,
