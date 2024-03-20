@@ -17,7 +17,7 @@ from torch.distributions import MultivariateNormal
 
 from eval_utils import load_model
 from cdvae.common.data_utils import get_scaler_from_data_list
-from visualization.visualize_materials import create_materials, plot_material_single, plot_xrd_single
+from visualization.visualize_materials import create_materials, plot_material_single, plot_xrd_single, augment_xrdStrip
 from compute_metrics import Crystal, RecEval, GenEval
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
@@ -28,6 +28,9 @@ from PIL import Image
 AVG_COMPOSITION_ERROR = 'composition error rate'
 AVG_XRD_MSE = 'Scaled XRD mean squared error'
 AVG_XRD_L1 = 'Scaled XRD mean absolute error'
+BEST_XRD_MSE = 'Average best scaled XRD mean squared error among candidates'
+BEST_XRD_L1 = 'Average best scaled XRD mean absolute error among candidates'
+
 MATCH_RATE = 'match_rate'
 RMS_DIST = 'rms_dist'
 COMPOSITION_VALIDITY = 'comp_valid'
@@ -85,7 +88,7 @@ def calculate_accuracy(probabilities, labels):
 
 def optimization(args, model, ld_kwargs, data_loader,
                  num_starting_points=1000, num_gradient_steps=5000,
-                 lr=1e-3, k=10, l2_penalty=1e-5, label=''):
+                 lr=1e-3, k=10, num_candidates=5, l2_penalty=1e-5, label=''):
     assert data_loader is not None
 
     base_output_dir = f'materials_viz/{label}'
@@ -195,16 +198,9 @@ def optimization(args, model, ld_kwargs, data_loader,
 
         print('know num atoms:', init_num_atoms is not None)
         print('know atom types:', init_atom_types is not None)
-
+        
         crystals = model.langevin_dynamics(z, ld_kwargs, gt_num_atoms=init_num_atoms, gt_atom_types=init_atom_types)
         crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
-
-        # convert crystals to xrds
-        frac_coords = crystals['frac_coords']
-        num_atoms = crystals['num_atoms']
-        atom_types = crystals['atom_types']
-        lengths = crystals['lengths']
-        angles = crystals['angles']
 
         alt_args = SimpleNamespace()
         alt_args.wave_source = 'CuKa'
@@ -212,38 +208,16 @@ def optimization(args, model, ld_kwargs, data_loader,
         alt_args.xrd_vector_dim = 512
         alt_args.max_theta = 180
         alt_args.min_theta = 0
-
+            
         # predictions
-        the_coords, atom_types, generated_xrds, curr_gen_crystals_list = create_materials(alt_args, 
+        frac_coords = crystals['frac_coords']
+        num_atoms = crystals['num_atoms']
+        atom_types = crystals['atom_types']
+        lengths = crystals['lengths']
+        angles = crystals['angles']
+
+        all_opt_coords, all_opt_atom_types, opt_generated_xrds, curr_gen_crystals_list = create_materials(alt_args, 
                 frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
-
-        # apply smoothing to the XRD patterns
-        smoothed_xrds = list()
-        for i in range(generated_xrds.shape[0]):
-            smoothed_xrd = data_loader.dataset.augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
-            smoothed_xrds.append(smoothed_xrd)
-        generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
-
-        # compute loss on desired and generated xrds
-        target = target_noisy_xrd.broadcast_to(generated_xrds.shape[0], 512)
-        input = torch.tensor(generated_xrds).to(model.device)
-        if args.l1_loss:
-            loss = F.l1_loss(input, target, reduction='none').mean(dim=-1)
-        else:
-            loss = F.mse_loss(input, target, reduction='none').mean(dim=-1)
-        # find the minimum loss element
-        min_loss_idx = torch.argmin(loss)
-        # construct the corresponding crystal
-        opt_coords = the_coords[min_loss_idx]
-        opt_atom_types = atom_types[min_loss_idx]
-        opt_xrd = input[min_loss_idx, :].cpu().numpy()
-        curr_pred_crystal = Crystal(curr_gen_crystals_list[min_loss_idx])
-        # save the optimal crystal and its xrd
-        pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder, idx=j)
-        pred_xrd_filepath = plot_xrd_single(alt_args, opt_xrd, opt_xrd_folder, idx=j)
-
-        # wandb.log({"predicted crystal": wandb.Image(pred_material_filepath)})
-        # wandb.log({"predicted xrd": wandb.Image(pred_xrd_filepath)})
 
         # plot base truth
         frac_coords = batch.frac_coords
@@ -255,7 +229,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         assert num_atoms.shape[0] == 1
         assert frac_coords.shape[0] == atom_types.shape[0]
 
-        the_coords, atom_types, generated_xrds, singleton_gt_crystal_list = create_materials(alt_args, 
+        the_coords, atom_types, bt_generated_xrds, singleton_gt_crystal_list = create_materials(alt_args, 
                 frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
         the_coords = np.array(the_coords)[0]
         atom_types = np.array(atom_types)[0]
@@ -263,49 +237,108 @@ def optimization(args, model, ld_kwargs, data_loader,
         assert len(singleton_gt_crystal_list) == 1
 
         curr_gt_crystal = Crystal(singleton_gt_crystal_list[0])
+        # log crystal
+        all_gt_crystals.append(curr_gt_crystal)
+
 
         gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
         gt_xrd_filepath = plot_xrd_single(alt_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
 
-        # wandb.log({"gt crystal": wandb.Image(gt_material_filepath)})
-        # wandb.log({"gt xrd": wandb.Image(gt_xrd_filepath)})     
+        # apply smoothing to the XRD patterns
+        smoothed_xrds = list()
+        for i in range(opt_generated_xrds.shape[0]):
+            smoothed_xrd = augment_xrdStrip(torch.tensor(opt_generated_xrds[i,:]))
+            smoothed_xrds.append(smoothed_xrd)
+        opt_generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
 
-        # Log image
-        log_img = collate_images(gt_material=gt_material_filepath, gt_xrd=gt_xrd_filepath,
-                                 pred_material=pred_material_filepath, pred_xrd=pred_xrd_filepath,
-                                 width=600)
-        wandb.log({"prediction": wandb.Image(log_img)})  
+        # compute loss on desired and generated xrds
+        target = target_noisy_xrd.broadcast_to(bt_generated_xrds.shape[0], 512)
+        input = torch.tensor(opt_generated_xrds).to(model.device)
+
+        if args.l1_loss:
+            loss = F.l1_loss(input, target, reduction='none').mean(dim=-1)
+        else:
+            loss = F.mse_loss(input, target, reduction='none').mean(dim=-1)
+        
+        # find the (num_candidates) minimum loss elements
+        min_loss_indices = torch.argsort(loss).squeeze(0)[:num_candidates].tolist()
+        
+        candidate_xrd_l1_errors = list()
+        candidate_xrd_l2_errors = list()
+
+        # create material subdir
+        subdir = f'material_{j}'
+        opt_material_folder_cand = f'{opt_material_folder}/{subdir}'
+        opt_xrd_folder_cand = f'{opt_xrd_folder}/{subdir}'
+        
+        os.makedirs(opt_material_folder_cand, exist_ok=True)
+        os.makedirs(opt_xrd_folder_cand, exist_ok=True)
+
+        print(f'crystal {j} has {len(min_loss_indices)} candidates')
+        for i, min_loss_idx in enumerate(min_loss_indices): # for each candidate
+
+            filename = f'candidate_{i}.png'
+            # construct the corresponding crystal
+            opt_coords = all_opt_coords[min_loss_idx]
+            opt_atom_types = all_opt_atom_types[min_loss_idx]
+            opt_xrd = input[min_loss_idx, :].cpu().numpy()
+            curr_pred_crystal = Crystal(curr_gen_crystals_list[min_loss_idx])
+
+            # log best (lowest loss) crystal for metrics
+            if i == 0:
+                all_bestPred_crystals.append(curr_pred_crystal)
+
+            # save the optimal crystal and its xrd
+            pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder_cand, idx=j, filename=filename)
+            pred_xrd_filepath = plot_xrd_single(alt_args, opt_xrd, opt_xrd_folder_cand, idx=j, filename=filename)
+               
+            # Log image
+            log_img = collate_images(gt_material=gt_material_filepath, gt_xrd=gt_xrd_filepath,
+                                    pred_material=pred_material_filepath, pred_xrd=pred_xrd_filepath,
+                                    width=600)
+            wandb.log({"prediction": wandb.Image(log_img)})  
+
+            # metrics
+            assert target_noisy_xrd.squeeze().shape == input[min_loss_idx].squeeze().shape
+            xrd_l1_error = F.l1_loss(target_noisy_xrd.squeeze(), input[min_loss_idx].squeeze()).item()
+            xrd_l2_error = F.mse_loss(target_noisy_xrd.squeeze(), input[min_loss_idx].squeeze()).item()
+            candidate_xrd_l1_errors.append(xrd_l1_error)
+            candidate_xrd_l2_errors.append(xrd_l2_error)
+            print(f'xrd l1 error: {xrd_l1_error}')
+            print(f'xrd l2 error: {xrd_l2_error}')
+
+            composition_error = compare_composition(atom_types, opt_atom_types)
+            all_composition_errors.append(composition_error)
+            print(f'composition error: {composition_error}')
+
+            is_num_atoms_correct = compare_num_atoms(gt_atom_types=atom_types, 
+                                                    pred_atom_types=opt_atom_types)
+            if is_num_atoms_correct:
+                total_correct_num_atoms += 1
+            print(f'num atoms: {len(atom_types)} (gt) vs {len(opt_atom_types)} (pred)')
+
+        
+        all_xrd_l1_errors.append(candidate_xrd_l1_errors)
+        all_xrd_l2_errors.append(candidate_xrd_l2_errors)
 
         wandb.finish() 
+        
+    # average xrd errors
+    avg_xrd_mse = np.mean([list for list in all_xrd_l2_errors])
+    avg_xrd_l1 = np.mean([list for list in all_xrd_l1_errors])
 
-        # metrics
-        assert target_noisy_xrd.squeeze().shape == input[min_loss_idx].squeeze().shape
-        xrd_l1_error = F.l1_loss(target_noisy_xrd.squeeze(), input[min_loss_idx].squeeze()).item()
-        xrd_l2_error = F.mse_loss(target_noisy_xrd.squeeze(), input[min_loss_idx].squeeze()).item()
-        all_xrd_l1_errors.append(xrd_l1_error)
-        all_xrd_l2_errors.append(xrd_l2_error)
-        print(f'xrd l1 error: {xrd_l1_error}')
-        print(f'xrd l2 error: {xrd_l2_error}')
-
-        composition_error = compare_composition(atom_types, opt_atom_types)
-        all_composition_errors.append(composition_error)
-        print(f'composition error: {composition_error}')
-
-        is_num_atoms_correct = compare_num_atoms(gt_atom_types=atom_types, 
-                                                 pred_atom_types=opt_atom_types)
-        if is_num_atoms_correct:
-            total_correct_num_atoms += 1
-        print(f'num atoms: {len(atom_types)} (gt) vs {len(opt_atom_types)} (pred)')
-
-        # log crystals
-        all_gt_crystals.append(curr_gt_crystal)
-        all_bestPred_crystals.append(curr_pred_crystal)
+    # best of candidate xrd errors
+    best_xrd_mse = np.mean([np.min(list) for list in all_xrd_l2_errors])
+    best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
 
     ret_val = {
         AVG_COMPOSITION_ERROR: np.mean(all_composition_errors),
-        AVG_XRD_MSE: np.mean(all_xrd_l2_errors),
-        AVG_XRD_L1: np.mean(all_xrd_l1_errors)
+        AVG_XRD_MSE: avg_xrd_mse,
+        AVG_XRD_L1: avg_xrd_l1,
+        BEST_XRD_MSE: best_xrd_mse,
+        BEST_XRD_L1: best_xrd_l1
     }
+
     ret_val.update(check_structure_match(gt_structures=all_gt_crystals, 
                                          pred_structures=all_bestPred_crystals))
     ret_val.update(check_validity(gt_structures=all_gt_crystals,
@@ -390,6 +423,7 @@ def main(args):
                  num_gradient_steps=args.num_gradient_steps,
                  lr=args.lr,
                  k=args.num_tested_materials,
+                 num_candidates=args.num_candidates,
                  label=args.label)    
 
 if __name__ == '__main__':
@@ -414,6 +448,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_tested_materials', default=10, type=int)
     parser.add_argument('--l1_loss', action='store_true')
     parser.add_argument('--label', default='')
+    parser.add_argument('--num_candidates', default=5, type=int)
 
     args = parser.parse_args()
 
