@@ -134,8 +134,9 @@ def optimization(args, model, ld_kwargs, data_loader,
         total_gradient_steps = num_gradient_steps * (1+2+4) - 1
         scheduler = CosineAnnealingWarmRestarts(opt, num_gradient_steps, T_mult=2, eta_min=args.min_lr)
         model.freeze()
+        # TODO: refactor
         with tqdm(total=total_gradient_steps, desc="Property opt", unit="steps") as pbar:
-            # TODO: add model.fc_num_atoms, model.fc_composition, model.fc_lattice
+            # TODO: add model.fc_lattice
             for i in range(total_gradient_steps):
                 opt.zero_grad()
                 if args.l1_loss:
@@ -265,6 +266,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         
         candidate_xrd_l1_errors = list()
         candidate_xrd_l2_errors = list()
+        candidate_match_status = list()
 
         # create material subdir
         subdir = f'material_{j}'
@@ -287,6 +289,7 @@ def optimization(args, model, ld_kwargs, data_loader,
             # log best (lowest loss) crystal for metrics
             if i == 0:
                 all_bestPred_crystals.append(curr_pred_crystal)
+            # TODO: save crystals in appropriate format
 
             # save the optimal crystal and its xrd
             pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder_cand, idx=j, filename=filename)
@@ -317,7 +320,24 @@ def optimization(args, model, ld_kwargs, data_loader,
                 total_correct_num_atoms += 1
             print(f'num atoms: {len(atom_types)} (gt) vs {len(opt_atom_types)} (pred)')
 
+            candidate_match_status.append(check_structure_match(
+                gt_structures=[curr_gt_crystal], 
+                pred_structures=[curr_pred_crystal])
+            )
+
+        curr_material_metrics = {
+            AVG_XRD_MSE: np.mean(candidate_xrd_l2_errors),
+            AVG_XRD_L1: np.mean(candidate_xrd_l1_errors),
+            BEST_XRD_MSE: np.min(candidate_xrd_l2_errors),
+            BEST_XRD_L1: np.min(candidate_xrd_l1_errors),
+            MATCH_RATE: candidate_match_status
+        }
+
+        with open(f'{metrics_folder}/material{j}.json', 'w') as fout:
+            json.dump(curr_material_metrics, fout, indent=4)
         
+        print(json.dumps(curr_material_metrics, indent=4))
+
         all_xrd_l1_errors.append(candidate_xrd_l1_errors)
         all_xrd_l2_errors.append(candidate_xrd_l2_errors)
 
@@ -339,11 +359,12 @@ def optimization(args, model, ld_kwargs, data_loader,
         BEST_XRD_L1: best_xrd_l1
     }
 
+    # TODO: structure match & validity should reflect all the top candidate crystals
     ret_val.update(check_structure_match(gt_structures=all_gt_crystals, 
                                          pred_structures=all_bestPred_crystals))
     ret_val.update(check_validity(gt_structures=all_gt_crystals,
                                   pred_structures=all_bestPred_crystals))
-    ret_val[NUM_ATOM_ACCURACY] = total_correct_num_atoms / len(all_gt_crystals)
+    ret_val[NUM_ATOM_ACCURACY] = total_correct_num_atoms / (num_candidates * len(all_gt_crystals))
 
     with open(f'{metrics_folder}/aggregate_metrics.json', 'w') as fout:
         json.dump(ret_val, fout, indent=4)
