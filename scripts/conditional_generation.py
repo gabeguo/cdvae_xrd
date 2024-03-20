@@ -198,7 +198,7 @@ def optimization(args, model, ld_kwargs, data_loader,
 
         print('know num atoms:', init_num_atoms is not None)
         print('know atom types:', init_atom_types is not None)
-
+        
         crystals = model.langevin_dynamics(z, ld_kwargs, gt_num_atoms=init_num_atoms, gt_atom_types=init_atom_types)
         crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
 
@@ -215,15 +215,6 @@ def optimization(args, model, ld_kwargs, data_loader,
         atom_types = crystals['atom_types']
         lengths = crystals['lengths']
         angles = crystals['angles']
-        the_coords, atom_types, generated_xrds, curr_gen_crystals_list = create_materials(alt_args, 
-                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
-
-        # apply smoothing to the XRD patterns
-        smoothed_xrds = list()
-        for i in range(generated_xrds.shape[0]):
-            smoothed_xrd = data_loader.dataset.augment_xrdStrip(torch.tensor(generated_xrds[i,:]))
-            smoothed_xrds.append(smoothed_xrd)
-        generated_xrds = torch.stack(smoothed_xrds, dim=0).numpy()
 
         all_opt_coords, all_opt_atom_types, opt_generated_xrds, curr_gen_crystals_list = create_materials(alt_args, 
                 frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
@@ -263,7 +254,7 @@ def optimization(args, model, ld_kwargs, data_loader,
         # compute loss on desired and generated xrds
         target = target_noisy_xrd.broadcast_to(bt_generated_xrds.shape[0], 512)
         input = torch.tensor(opt_generated_xrds).to(model.device)
-        print("GENERATED_XRDS shape:", input.shape)
+
         if args.l1_loss:
             loss = F.l1_loss(input, target, reduction='none').mean(dim=-1)
         else:
