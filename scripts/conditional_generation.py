@@ -277,6 +277,8 @@ def optimization(args, model, ld_kwargs, data_loader,
         os.makedirs(opt_xrd_folder_cand, exist_ok=True)
 
         print(f'crystal {j} has {len(min_loss_indices)} candidates')
+        best_rms_dist = 1e6
+        best_crystal = None
         for i, min_loss_idx in enumerate(min_loss_indices): # for each candidate
 
             filename = f'candidate_{i}.png'
@@ -286,9 +288,9 @@ def optimization(args, model, ld_kwargs, data_loader,
             opt_xrd = input[min_loss_idx, :].cpu().numpy()
             curr_pred_crystal = Crystal(curr_gen_crystals_list[min_loss_idx])
 
-            # log best (lowest loss) crystal for metrics
+            # By default, log best (lowest loss) crystal for metrics
             if i == 0:
-                all_bestPred_crystals.append(curr_pred_crystal)
+                best_crystal = curr_pred_crystal
             # TODO: save crystals in appropriate format
 
             # save the optimal crystal and its xrd
@@ -320,10 +322,20 @@ def optimization(args, model, ld_kwargs, data_loader,
                 total_correct_num_atoms += 1
             print(f'num atoms: {len(atom_types)} (gt) vs {len(opt_atom_types)} (pred)')
 
-            candidate_match_status.append(check_structure_match(
+            # Check if this matches
+            curr_match_stats = check_structure_match(
                 gt_structures=[curr_gt_crystal], 
                 pred_structures=[curr_pred_crystal])
-            )
+            candidate_match_status.append(curr_match_stats)
+
+            # Pick crystal with lowest RMS dist as our candidate
+            if curr_match_stats[MATCH_RATE] > 0.5 and curr_match_stats[RMS_DIST] < best_rms_dist:
+                assert int(curr_match_stats[MATCH_RATE]) == 1
+                best_rms_dist = curr_match_stats[RMS_DIST]
+                best_crystal = curr_pred_crystal
+        
+        # Log the crystal with lowest RMS dist
+        all_bestPred_crystals.append(best_crystal)
 
         curr_material_metrics = {
             AVG_XRD_MSE: np.mean(candidate_xrd_l2_errors),
@@ -359,7 +371,6 @@ def optimization(args, model, ld_kwargs, data_loader,
         BEST_XRD_L1: best_xrd_l1
     }
 
-    # TODO: structure match & validity should reflect all the top candidate crystals
     ret_val.update(check_structure_match(gt_structures=all_gt_crystals, 
                                          pred_structures=all_bestPred_crystals))
     ret_val.update(check_validity(gt_structures=all_gt_crystals,
