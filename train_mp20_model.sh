@@ -1,0 +1,1 @@
+python -W ignore cdvae/run.py data=mp_20_resplit expname=mp_20_moreTrainData model.predict_property=True
