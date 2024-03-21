@@ -98,13 +98,17 @@ def optimization(args, model, ld_kwargs, data_loader,
 
     opt_material_folder = f'{base_output_dir}/opt_material'
     opt_xrd_folder = f'{base_output_dir}/opt_xrd'
+    opt_cif_folder = f'{base_output_dir}/opt_cif'
     gt_material_folder = f'{base_output_dir}/base_truth_material'
     gt_xrd_folder = f'{base_output_dir}/base_truth_xrd'
+    gt_cif_folder = f'{base_output_dir}/base_truth_cif'
     metrics_folder = f'{base_output_dir}/metrics'
     os.makedirs(opt_material_folder, exist_ok=True)
     os.makedirs(opt_xrd_folder, exist_ok=True)
+    os.makedirs(opt_cif_folder, exist_ok=True)
     os.makedirs(gt_material_folder, exist_ok=True)
     os.makedirs(gt_xrd_folder, exist_ok=True)
+    os.makedirs(gt_cif_folder, exist_ok=True)
     os.makedirs(metrics_folder, exist_ok=True)
 
     m = MultivariateNormal(torch.zeros(model.hparams.hidden_dim).cuda(), torch.eye(model.hparams.hidden_dim).cuda())
@@ -241,6 +245,8 @@ def optimization(args, model, ld_kwargs, data_loader,
         # log crystal
         all_gt_crystals.append(curr_gt_crystal)
 
+        # save cif
+        curr_gt_crystal.structure.to(filename=f'{gt_cif_folder}/material{j}.cif', fmt='cif')
 
         gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
         gt_xrd_filepath = plot_xrd_single(alt_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
@@ -272,9 +278,11 @@ def optimization(args, model, ld_kwargs, data_loader,
         subdir = f'material_{j}'
         opt_material_folder_cand = f'{opt_material_folder}/{subdir}'
         opt_xrd_folder_cand = f'{opt_xrd_folder}/{subdir}'
+        opt_cif_folder_cand = f'{opt_cif_folder}/{subdir}'
         
         os.makedirs(opt_material_folder_cand, exist_ok=True)
         os.makedirs(opt_xrd_folder_cand, exist_ok=True)
+        os.makedirs(opt_cif_folder_cand, exist_ok=True)
 
         print(f'crystal {j} has {len(min_loss_indices)} candidates')
         best_rms_dist = 1e6
@@ -297,6 +305,8 @@ def optimization(args, model, ld_kwargs, data_loader,
             pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder_cand, idx=j, filename=filename)
             pred_xrd_filepath = plot_xrd_single(alt_args, opt_xrd, opt_xrd_folder_cand, idx=j, filename=filename)
                
+            curr_pred_crystal.structure.to(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif', fmt='cif')
+
             # Log image
             log_img = collate_images(gt_material=gt_material_filepath, gt_xrd=gt_xrd_filepath,
                                     pred_material=pred_material_filepath, pred_xrd=pred_xrd_filepath,
