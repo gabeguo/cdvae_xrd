@@ -151,16 +151,17 @@ def optimize_latent_code(args, model, batch, target_noisy_xrd):
 def process_candidates(args, xrd_args, j,
         curr_gen_crystals_list, all_opt_coords, all_opt_atom_types, 
         opt_generated_xrds, 
-        min_loss_indices, opt_material_folder, opt_xrd_folder, opt_cif_folder, metrics_folder, subdir,
+        min_loss_indices, opt_material_folder, opt_xrd_folder, pred_opt_xrd_folder, opt_cif_folder, metrics_folder, subdir,
         all_bestPred_crystals,
-        target_noisy_xrd, curr_gt_crystal, gt_atom_types,
+        target_noisy_xrd, final_pred_xrds, curr_gt_crystal, gt_atom_types,
         gt_material_filepath, gt_xrd_filepath,
         all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms):
 
     opt_material_folder_cand = f'{opt_material_folder}/{subdir}'
     opt_xrd_folder_cand = f'{opt_xrd_folder}/{subdir}'
+    pred_opt_xrd_folder_cand = f'{pred_opt_xrd_folder}/{subdir}'
     opt_cif_folder_cand = f'{opt_cif_folder}/{subdir}'
-    for the_folder in [opt_material_folder_cand, opt_xrd_folder_cand, opt_cif_folder_cand]:
+    for the_folder in [opt_material_folder_cand, opt_xrd_folder_cand, opt_cif_folder_cand, pred_opt_xrd_folder_cand]:
         os.makedirs(the_folder, exist_ok=True) 
 
     candidate_xrd_l1_errors = list()
@@ -184,6 +185,7 @@ def process_candidates(args, xrd_args, j,
         # save the optimal crystal and its xrd
         pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder_cand, idx=j, filename=filename)
         pred_xrd_filepath = plot_xrd_single(xrd_args, opt_xrd, opt_xrd_folder_cand, idx=j, filename=filename)
+        pred_opt_xrd_filepath = plot_xrd_single(xrd_args, final_pred_xrds[min_loss_idx].detach().cpu().numpy(), pred_opt_xrd_folder_cand, idx=j, filename=filename)
         curr_pred_crystal.structure.to(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif', fmt='cif')
 
         # Log image
@@ -272,6 +274,7 @@ def optimization(args, model, ld_kwargs, data_loader):
 
     opt_material_folder = f'{base_output_dir}/opt_material'
     opt_xrd_folder = f'{base_output_dir}/opt_xrd'
+    pred_opt_xrd_folder = f'{base_output_dir}/pred_opt_xrd'
     opt_cif_folder = f'{base_output_dir}/opt_cif'
     gt_material_folder = f'{base_output_dir}/base_truth_material'
     gt_xrd_folder = f'{base_output_dir}/base_truth_xrd'
@@ -306,6 +309,9 @@ def optimization(args, model, ld_kwargs, data_loader):
         # get xrd
         target_noisy_xrd = batch.y.reshape(1, 512)
         z = optimize_latent_code(args=args, model=model, batch=batch, target_noisy_xrd=target_noisy_xrd)
+
+        # get predicted xrd for all optimized candidates
+        final_pred_xrds = model.fc_property(z).reshape(-1, 512)
 
         # TODO: speed this one up
         init_num_atoms = batch.num_atoms.repeat(args.num_starting_points) if args.num_atom_lambda > EPS else None
@@ -371,10 +377,10 @@ def optimization(args, model, ld_kwargs, data_loader):
                 all_opt_coords=all_opt_coords, all_opt_atom_types=all_opt_atom_types, 
                 opt_generated_xrds=opt_generated_xrds, 
                 min_loss_indices=min_loss_indices, 
-                opt_material_folder=opt_material_folder, opt_xrd_folder=opt_xrd_folder, 
+                opt_material_folder=opt_material_folder, opt_xrd_folder=opt_xrd_folder, pred_opt_xrd_folder=pred_opt_xrd_folder,
                 opt_cif_folder=opt_cif_folder, metrics_folder=metrics_folder, subdir=subdir,
                 all_bestPred_crystals=all_bestPred_crystals,
-                target_noisy_xrd=target_noisy_xrd, curr_gt_crystal=curr_gt_crystal, gt_atom_types=atom_types,
+                target_noisy_xrd=target_noisy_xrd, final_pred_xrds=final_pred_xrds, curr_gt_crystal=curr_gt_crystal, gt_atom_types=atom_types,
                 gt_material_filepath=gt_material_filepath, gt_xrd_filepath=gt_xrd_filepath,
                 all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
                 all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms)
