@@ -38,6 +38,9 @@ STRUCTURE_VALIDITY = 'struct_valid'
 VALIDITY = 'valid'
 NUM_ATOM_ACCURACY = '% materials w/ # atoms pred correctly'
 
+USE_ALL_SPACEGROUPS = "aggregated stats (all spacegroups)"
+COUNT = "number of crystals"
+
 EPS = 1e-10
 
 # Thanks ChatGPT!
@@ -163,6 +166,8 @@ def process_candidates(args, xrd_args, j,
     candidate_xrd_l1_errors = list()
     candidate_xrd_l2_errors = list()
     candidate_match_status = list()
+    candidate_composition_errors = list()
+    candidate_has_correct_num_atoms = list()
 
     print(f'crystal {j} has {len(min_loss_indices)} candidates')
     best_rms_dist = 1e6
@@ -196,12 +201,12 @@ def process_candidates(args, xrd_args, j,
         print(f'xrd l2 error: {xrd_l2_error}')
 
         composition_error = compare_composition(gt_atom_types, opt_atom_types)
-        all_composition_errors.append(composition_error)
+        candidate_composition_errors.append(composition_error)
         print(f'composition error: {composition_error}')
 
         is_num_atoms_correct = compare_num_atoms(gt_atom_types=gt_atom_types, 
                                                 pred_atom_types=opt_atom_types)
-        has_correct_num_atoms.append(int(is_num_atoms_correct))
+        candidate_has_correct_num_atoms.append(int(is_num_atoms_correct))
         print(f'num atoms: {len(gt_atom_types)} (gt) vs {len(opt_atom_types)} (pred)')
 
         # Check if this matches
@@ -233,6 +238,8 @@ def process_candidates(args, xrd_args, j,
 
     all_xrd_l1_errors.append(candidate_xrd_l1_errors)
     all_xrd_l2_errors.append(candidate_xrd_l2_errors)
+    all_composition_errors.append(candidate_composition_errors)
+    has_correct_num_atoms.append(candidate_has_correct_num_atoms)
 
     wandb.finish() 
     return
@@ -282,11 +289,19 @@ def optimization(args, model, ld_kwargs, data_loader):
     all_xrd_l2_errors = list()
     has_correct_num_atoms = list()
 
+    spacegroups = list()
+    formula_strs = list()
+    mpids = list()
+
     for j, batch in enumerate(data_loader):
         wandb.init(config=args, project='new conditional generation', name=f'crystal {j}', group=args.label)
         if j == args.num_tested_materials:
             break
         batch = batch.to(model.device)
+
+        spacegroups.append(int(batch.spacegroup[0]))
+        formula_strs.append(batch.pretty_formula[0])
+        mpids.append(batch.mpid[0])
         
         # get xrd
         target_noisy_xrd = batch.y.reshape(1, 512)
@@ -364,6 +379,48 @@ def optimization(args, model, ld_kwargs, data_loader):
                 all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
                 all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms)
 
+    ret_val = dict()
+    for curr_spacegroup in set([USE_ALL_SPACEGROUPS] + spacegroups):
+        curr_results = calculate_metrics(all_gt_crystals=all_gt_crystals, all_bestPred_crystals=all_bestPred_crystals,
+            all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
+            all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms,
+            spacegroups=spacegroups, desired_spacegroup=curr_spacegroup)
+        ret_val[curr_spacegroup] = curr_results
+
+    with open(f'{metrics_folder}/aggregate_metrics.json', 'w') as fout:
+        json.dump(ret_val, fout, indent=4)
+    
+    print(json.dumps(ret_val, indent=4))
+
+    return ret_val
+
+def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
+            all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms,
+            spacegroups, desired_spacegroup):
+    # turn into numpy arrays
+    spacegroups = np.array(spacegroups)
+    all_gt_crystals = np.array(all_gt_crystals)
+    all_bestPred_crystals = np.array(all_bestPred_crystals)
+    all_xrd_l1_errors = np.array(all_xrd_l1_errors)
+    all_xrd_l2_errors = np.array(all_xrd_l2_errors)
+    all_composition_errors = np.array(all_composition_errors)
+    has_correct_num_atoms = np.array(has_correct_num_atoms)
+
+    num_materials_in_spacegroup = len(spacegroups)
+    if desired_spacegroup != USE_ALL_SPACEGROUPS:
+        index_mask = spacegroups == desired_spacegroup
+        assert len(index_mask) == len(spacegroups)
+        assert np.sum(index_mask) > 0 and np.sum(index_mask) < len(spacegroups)
+
+        all_gt_crystals = all_gt_crystals[index_mask]
+        all_bestPred_crystals = all_bestPred_crystals[index_mask]
+        all_xrd_l1_errors = all_xrd_l1_errors[index_mask]
+        all_xrd_l2_errors = all_xrd_l2_errors[index_mask]
+        all_composition_errors = all_composition_errors[index_mask]
+        has_correct_num_atoms = has_correct_num_atoms[index_mask]
+
+        num_materials_in_spacegroup = np.sum(index_mask)
+
     # average xrd errors
     avg_xrd_mse = np.mean(np.array(all_xrd_l2_errors))
     avg_xrd_l1 = np.mean(np.array(all_xrd_l1_errors))
@@ -373,6 +430,7 @@ def optimization(args, model, ld_kwargs, data_loader):
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
 
     ret_val = {
+        COUNT: int(num_materials_in_spacegroup),
         AVG_COMPOSITION_ERROR: np.mean(all_composition_errors),
         AVG_XRD_MSE: avg_xrd_mse,
         AVG_XRD_L1: avg_xrd_l1,
@@ -384,13 +442,9 @@ def optimization(args, model, ld_kwargs, data_loader):
                                          pred_structures=all_bestPred_crystals))
     ret_val.update(check_validity(gt_structures=all_gt_crystals,
                                   pred_structures=all_bestPred_crystals))
-    ret_val[NUM_ATOM_ACCURACY] = sum(has_correct_num_atoms) / len(has_correct_num_atoms)
-
-    with open(f'{metrics_folder}/aggregate_metrics.json', 'w') as fout:
-        json.dump(ret_val, fout, indent=4)
+    ret_val[NUM_ATOM_ACCURACY] = np.sum(has_correct_num_atoms) \
+        / (has_correct_num_atoms.shape[0] * has_correct_num_atoms.shape[1])
     
-    print(json.dumps(ret_val, indent=4))
-
     return ret_val
 
 def get_elemental_ratios(atom_types):
