@@ -4,6 +4,9 @@ import torch
 import os
 import json
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 from tqdm import tqdm
 from torch.optim import Adam
 import torch.nn.functional as F
@@ -42,6 +45,45 @@ USE_ALL_SPACEGROUPS = "aggregated stats (all spacegroups)"
 COUNT = "number of crystals"
 
 EPS = 1e-10
+
+# Thanks ChatGPT!
+
+# If you want to change the colors of the lines and shades, simply modify in the ax.fill_between() and ax.plot() functions
+# A list of possible colors can be found at: https://matplotlib.org/stable/gallery/color/named_colors.html
+def plot_overlaid_graphs(actual, prediction_nn, prediction_simulated, savepath):
+    fig, ax = plt.subplots()
+
+    # Plot and fill the area under the first curve
+    ax.fill_between(range(len(actual)), actual, color="royalblue", alpha=0.2)
+    ax.plot(actual, color="blue", alpha=0.6, label="Actual")  # Curve line
+
+    # Plot and fill the area under the second curve
+    ax.fill_between(range(len(prediction_nn)), prediction_nn, color="mistyrose", alpha=0.2)
+    ax.plot(prediction_nn, color="red", alpha=0.6, linestyle='dotted', linewidth=2, label="Prediction (NN)")  # Dotted curve line with increased linewidth
+
+    # Plot and fill the area under the second curve
+    ax.fill_between(range(len(prediction_simulated)), prediction_simulated, color="lightgreen", alpha=0.2)
+    ax.plot(prediction_simulated, color="green", alpha=0.6, linestyle='dashed', linewidth=2, label="Prediction (Simulated)")  # Dotted curve line with increased linewidth
+
+    # Customizing the plot
+    ax.set_title("XRD Patterns")
+    ax.set_xlabel("Theta (degrees)")
+    ax.set_ylabel("Scaled Intensity")
+    ax.set_xlim(0, 180)  # Set x-axis limits
+    ax.set_ylim(0, 1)  # Set y-axis limits
+    ax.set_xticks(np.arange(0, 181, 10))
+    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
+    ax.set_yticks(np.arange(0, 1.1, 0.1))  # Set horizontal gridlines every 0.1 from 0 to 1
+    ax.grid(True)  # Show gridlines
+    ax.legend()
+
+    # Display the plot
+    #plt.show()
+    plt.savefig(savepath)
+    plt.tight_layout()
+    plt.close()
+
+    return
 
 # Thanks ChatGPT!
 def resize_image_to_same_width(image, width):
@@ -222,6 +264,11 @@ def process_candidates(args, xrd_args, j,
             assert int(curr_match_stats[MATCH_RATE]) == 1
             best_rms_dist = curr_match_stats[RMS_DIST]
             best_crystal = curr_pred_crystal
+
+        plot_overlaid_graphs(actual=target_noisy_xrd.squeeze().detach().cpu().numpy(), 
+            prediction_nn=final_pred_xrds[min_loss_idx].detach().cpu().numpy(),
+            prediction_simulated=opt_xrd,
+            savepath=f'{opt_xrd_folder_cand}/candidate_{i}_overlaidXRD.png')
     
     # Log the crystal with lowest RMS dist
     all_bestPred_crystals.append(best_crystal)
