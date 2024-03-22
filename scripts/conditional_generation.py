@@ -347,7 +347,7 @@ def optimization(args, model, ld_kwargs, data_loader):
         curr_gt_crystal = Crystal(singleton_gt_crystal_list[0])
         all_gt_crystals.append(curr_gt_crystal)
         # save cif
-        curr_gt_crystal.structure.to(filename=f'{gt_cif_folder}/material{j}.cif', fmt='cif')
+        curr_gt_crystal.structure.to(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
 
         gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
         gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
@@ -364,7 +364,7 @@ def optimization(args, model, ld_kwargs, data_loader):
         min_loss_indices = torch.argsort(loss).squeeze(0)[:args.num_candidates].tolist()
 
         # create material subdir
-        subdir = f'material_{j}'
+        subdir = f'material_{j}_{mpids[-1]}_{formula_strs[-1]}'
 
         process_candidates(args=args, xrd_args=xrd_args, j=j,
                 curr_gen_crystals_list=curr_gen_crystals_list, 
