@@ -664,6 +664,8 @@ def preprocess(input_file, num_workers, niggli, primitive, graph_method,
             'mp_id': row['material_id'],
             'cif': crystal_str,
             'graph_arrays': graph_arrays,
+            'spacegroup.number': row['spacegroup.number'],
+            'pretty_formula': row['pretty_formula'],
         }
         result_dict.update(properties)
         return result_dict

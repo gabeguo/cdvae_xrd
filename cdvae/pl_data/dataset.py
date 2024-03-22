@@ -84,6 +84,9 @@ class CrystDataset(Dataset):
             to_jimages=torch.LongTensor(to_jimages),
             num_atoms=num_atoms,
             num_bonds=edge_indices.shape[0],
+            spacegroup=data_dict['spacegroup.number'],
+            pretty_formula=data_dict['pretty_formula'],
+            mpid=data_dict['mp_id'],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
             y=prop,
         )
