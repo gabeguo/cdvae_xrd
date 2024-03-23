@@ -53,17 +53,19 @@ EPS = 1e-10
 def plot_overlaid_graphs(actual, prediction_nn, prediction_simulated, savepath):
     fig, ax = plt.subplots()
 
+    thetas = [pos * 180 / len(actual) for pos in range(len(actual))]
+
     # Plot and fill the area under the first curve
-    ax.fill_between(range(len(actual)), actual, color="royalblue", alpha=0.2)
-    ax.plot(actual, color="blue", alpha=0.6, label="Actual")  # Curve line
+    ax.fill_between(thetas, actual, color="royalblue", alpha=0.2)
+    ax.plot(thetas, actual, color="blue", alpha=0.6, label="Actual")  # Curve line
 
     # Plot and fill the area under the second curve
-    ax.fill_between(range(len(prediction_nn)), prediction_nn, color="mistyrose", alpha=0.2)
-    ax.plot(prediction_nn, color="red", alpha=0.6, linestyle='dotted', linewidth=2, label="Prediction (NN)")  # Dotted curve line with increased linewidth
+    ax.fill_between(thetas, prediction_nn, color="mistyrose", alpha=0.2)
+    ax.plot(thetas, prediction_nn, color="red", alpha=0.6, linestyle='dotted', linewidth=2, label="Prediction (NN)")  # Dotted curve line with increased linewidth
 
     # Plot and fill the area under the second curve
-    ax.fill_between(range(len(prediction_simulated)), prediction_simulated, color="lightgreen", alpha=0.2)
-    ax.plot(prediction_simulated, color="green", alpha=0.6, linestyle='dashed', linewidth=2, label="Prediction (Simulated)")  # Dotted curve line with increased linewidth
+    ax.fill_between(thetas, prediction_simulated, color="lightgreen", alpha=0.2)
+    ax.plot(thetas, prediction_simulated, color="green", alpha=0.6, linestyle='dashed', linewidth=2, label="Prediction (Simulated)")  # Dotted curve line with increased linewidth
 
     # Customizing the plot
     ax.set_title("XRD Patterns")
