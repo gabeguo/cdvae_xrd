@@ -229,7 +229,9 @@ def process_candidates(args, xrd_args, j,
         # save the optimal crystal and its xrd
         pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder_cand, idx=j, filename=filename)
         pred_xrd_filepath = plot_xrd_single(xrd_args, opt_xrd, opt_xrd_folder_cand, idx=j, filename=filename)
+        torch.save(opt_generated_xrds[min_loss_idx, :], os.path.join(opt_xrd_folder_cand, f'candidate_{i}.pt'))
         pred_opt_xrd_filepath = plot_xrd_single(xrd_args, final_pred_xrds[min_loss_idx].detach().cpu().numpy(), pred_opt_xrd_folder_cand, idx=j, filename=filename)
+        torch.save(final_pred_xrds[min_loss_idx].detach(), os.path.join(pred_opt_xrd_folder_cand, f'candidate_{i}.pt'))
         curr_pred_crystal.structure.to(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif', fmt='cif')
 
         # Log image
@@ -406,7 +408,7 @@ def optimization(args, model, ld_kwargs, data_loader):
 
         gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
         gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
-
+        torch.save(target_noisy_xrd.squeeze().cpu(), os.path.join(gt_xrd_folder, f'material{j}.pt'))
         # apply smoothing to the XRD patterns
         opt_generated_xrds = smooth_xrds(opt_generated_xrds=opt_generated_xrds, data_loader=data_loader).to(model.device)
 
