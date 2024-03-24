@@ -20,7 +20,7 @@ class CrystDataset(Dataset):
     def __init__(self, name: ValueNode, path: ValueNode,
                  prop: ValueNode, niggli: ValueNode, primitive: ValueNode,
                  graph_method: ValueNode, preprocess_workers: ValueNode,
-                 lattice_scale_method: ValueNode,
+                 lattice_scale_method: ValueNode, xrd_filter : ValueNode,
                  horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
                  vertical_noise=1e-3,
                  **kwargs):
@@ -33,6 +33,8 @@ class CrystDataset(Dataset):
         self.primitive = primitive
         self.graph_method = graph_method
         self.lattice_scale_method = lattice_scale_method
+        self.xrd_filter = xrd_filter
+        assert self.xrd_filter in ['gaussian', 'sinc'], "invalid filter requested"
 
         self.horizontal_noise_range=horizontal_noise_range
         self.vertical_noise=vertical_noise
@@ -95,18 +97,27 @@ class CrystDataset(Dataset):
     def augment_xrdStrip(self, curr_xrdStrip):
         """
         Augments curr_xrdStrip via:
-        -> Adding Gaussian peak broadening (horizontal)
+        -> Adding peak broadening (horizontal)
         -> Adding small Gaussian perturbations to peaks (vertical)
         """
         xrd = curr_xrdStrip.numpy()
         assert xrd.shape == (512,)
         # Peak broadening
-        filtered = gaussian_filter1d(xrd,
-                    sigma=np.random.uniform(
-                        low=512 * self.horizontal_noise_range[0], 
-                        high=512 * self.horizontal_noise_range[1]
-                    ), 
-                    mode='constant', cval=0)
+        if self.xrd_filter == 'sinc':
+            # ang units should be radians
+            angs = np.linspace(-2 * np.pi, 2*np.pi, 512)
+            sinc = np.sinc(angs)
+            filtered = np.convolve(xrd, sinc, mode='same')
+            assert filtered.shape == xrd.shape
+        elif self.xrd_filter == 'gaussian':
+            filtered = gaussian_filter1d(xrd,
+                        sigma=np.random.uniform(
+                            low=512 * self.horizontal_noise_range[0], 
+                            high=512 * self.horizontal_noise_range[1]
+                        ), 
+                        mode='constant', cval=0)
+        else:
+            raise ValueError("Invalid filter requested")
         filtered = filtered / np.max(filtered)
         filtered = torch.from_numpy(filtered)
         assert filtered.shape == curr_xrdStrip.shape

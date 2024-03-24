@@ -6,6 +6,7 @@ num_targets: 1
 niggli: true
 primitive: False
 graph_method: crystalnn
+xrd_filter: sinc
 lattice_scale_method: scale_length
 preprocess_workers: 30
 readout: mean
@@ -31,6 +32,7 @@ datamodule:
       niggli: ${data.niggli}
       primitive: ${data.primitive}
       graph_method: ${data.graph_method}
+      xrd_filter: ${data.xrd_filter}
       lattice_scale_method: ${data.lattice_scale_method}
       preprocess_workers: ${data.preprocess_workers}
 
@@ -42,6 +44,7 @@ datamodule:
         niggli: ${data.niggli}
         primitive: ${data.primitive}
         graph_method: ${data.graph_method}
+        xrd_filter: ${data.xrd_filter}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
 
@@ -53,6 +56,7 @@ datamodule:
         niggli: ${data.niggli}
         primitive: ${data.primitive}
         graph_method: ${data.graph_method}
+        xrd_filter: ${data.xrd_filter}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
 
