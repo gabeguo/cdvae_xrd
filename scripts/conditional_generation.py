@@ -315,12 +315,40 @@ def smooth_xrds(opt_generated_xrds, data_loader):
     opt_generated_xrds = torch.stack(smoothed_xrds, dim=0)
     return opt_generated_xrds
 
+def plot_filter(filter, angs, filter_viz_folder):
+    dtheta = (angs[-1] - angs[0])/filter.shape[0]
+    # plot filter
+    plt.figure()
+    plt.plot(angs, filter)
+    plt.xlabel('theta (rad)')
+    plt.ylabel('filter value')
+    plt.title('Sinc filter (spatial domain)')
+    plt.savefig(f'{filter_viz_folder}/filter_spatial.png')
+
+    # plot filter in frequency domain
+    # inverse shift the signal and fourier transform to freq domain
+    F = np.fft.fft(np.fft.ifftshift(filter))
+    # shift the signal back in freq domain
+    F_shifted = np.fft.fftshift(F)
+    # calculate frequency bins
+    freq = np.fft.fftfreq(filter.shape[0], dtheta)
+    # shift the frequencies
+    freq_shifted = np.fft.fftshift(freq)
+    # scale and plot
+    plt.figure()
+    plt.plot(freq_shifted, dtheta * np.real(F_shifted))
+    plt.xlabel('Frequency (1/rad)')
+    plt.ylabel('Amplitude')
+    plt.title('Sinc filter (frequency domain)')
+    plt.savefig(f'{filter_viz_folder}/filter_freq.png')
+    plt.close()
+
 def optimization(args, model, ld_kwargs, data_loader):
     assert data_loader is not None
     
     # assert filtering matches the configs
     assert args.xrd_filter == data_loader.dataset.xrd_filter, "XRD filter in config does not match the one in the dataset"
-    
+
     base_output_dir = f'materials_viz/{args.label}'
     os.makedirs(base_output_dir, exist_ok=True)
     with open(os.path.join(base_output_dir, 'parameters.json'), 'w') as fout:
@@ -333,10 +361,15 @@ def optimization(args, model, ld_kwargs, data_loader):
     gt_material_folder = f'{base_output_dir}/base_truth_material'
     gt_xrd_folder = f'{base_output_dir}/base_truth_xrd'
     gt_cif_folder = f'{base_output_dir}/base_truth_cif'
+    filter_viz_folder = f'{base_output_dir}/filter_viz'
     metrics_folder = f'{base_output_dir}/metrics'
     for the_folder in [opt_material_folder, opt_xrd_folder, opt_cif_folder, 
-                       gt_material_folder, gt_xrd_folder, gt_cif_folder, metrics_folder]:
+                       gt_material_folder, gt_xrd_folder, gt_cif_folder, metrics_folder, filter_viz_folder]:
         os.makedirs(the_folder, exist_ok=True)
+
+    # visualize filter and transform
+    angs, filter = data_loader.dataset.angs, data_loader.dataset.filter
+    plot_filter(filter, angs, filter_viz_folder)
 
     all_gt_crystals = list()
     all_bestPred_crystals = list()

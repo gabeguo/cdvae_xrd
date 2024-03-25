@@ -36,6 +36,14 @@ class CrystDataset(Dataset):
         self.xrd_filter = xrd_filter
         assert self.xrd_filter in ['gaussian', 'sinc'], "invalid filter requested"
 
+        if self.xrd_filter == 'sinc':
+            # ang units should be radians
+            angs = np.linspace(-2 * np.pi, 2*np.pi, 512)
+            self.angs = angs # for logging purposes
+            self.filter = np.sinc(angs)
+        else:
+            raise ValueError("Gaussian filter is deprecated. Use sinc filter instead.")
+        
         self.horizontal_noise_range=horizontal_noise_range
         self.vertical_noise=vertical_noise
 
@@ -104,10 +112,7 @@ class CrystDataset(Dataset):
         assert xrd.shape == (512,)
         # Peak broadening
         if self.xrd_filter == 'sinc':
-            # ang units should be radians
-            angs = np.linspace(-2 * np.pi, 2*np.pi, 512)
-            sinc = np.sinc(angs)
-            filtered = np.convolve(xrd, sinc, mode='same')
+            filtered = np.convolve(xrd, self.filter, mode='same')
             assert filtered.shape == xrd.shape
         elif self.xrd_filter == 'gaussian':
             filtered = gaussian_filter1d(xrd,
