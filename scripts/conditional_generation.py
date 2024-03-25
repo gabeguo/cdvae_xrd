@@ -317,7 +317,10 @@ def smooth_xrds(opt_generated_xrds, data_loader):
 
 def optimization(args, model, ld_kwargs, data_loader):
     assert data_loader is not None
-
+    
+    # assert filtering matches the configs
+    assert args.xrd_filter == data_loader.dataset.xrd_filter, "XRD filter in config does not match the one in the dataset"
+    
     base_output_dir = f'materials_viz/{args.label}'
     os.makedirs(base_output_dir, exist_ok=True)
     with open(os.path.join(base_output_dir, 'parameters.json'), 'w') as fout:
@@ -593,7 +596,7 @@ if __name__ == '__main__':
     parser.add_argument('--l1_loss', action='store_true')
     parser.add_argument('--label', default='')
     parser.add_argument('--num_candidates', default=5, type=int)
-
+    parser.add_argument('--xrd_filter', default='sinc')
     args = parser.parse_args()
 
     print('starting eval', args)
