@@ -75,13 +75,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
     parser.add_argument(
         '--data_dir',
-        default = '/home/gabeguo/cdvae_xrd/data/mp_20/no_xrd',
+        default = '/home/gabeguo/cdvae_xrd/data/mp_20_oldSplit/no_xrd',
         type=str,
         help='path to input CIF files'
     )
     parser.add_argument(
         '--save_dir',
-        default = '/home/gabeguo/cdvae_xrd/data/mp_20',
+        default = '/home/gabeguo/cdvae_xrd/data/mp_20_oldSplit',
         type=str,
         help='path to save XRD patterns'
     )
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--xrd_vector_dim',
-        default = 512,
+        default = 2048,
         type=int,
     )
     args = parser.parse_args()
