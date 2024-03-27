@@ -51,13 +51,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Split data')
     parser.add_argument(
         '--init_data_dir',
-        default = '/home/gabeguo/cdvae_xrd/data/mp_20',
+        default = '/home/gabeguo/cdvae_xrd/data/mp_20_oldSplit',
         type=str,
         help='path to input CIF+XRD files'
     )
     parser.add_argument(
         '--new_data_dir',
-        default = '/home/gabeguo/cdvae_xrd/data/mp_20_resplit',
+        default = '/home/gabeguo/cdvae_xrd/data/mp_20',
         type=str,
         help='path to save re-split data'
     )
