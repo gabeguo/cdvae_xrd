@@ -301,7 +301,7 @@ def create_xrd_args(args):
     alt_args = SimpleNamespace()
     alt_args.wave_source = 'CuKa'
     alt_args.num_materials = args.num_starting_points
-    alt_args.xrd_vector_dim = 512
+    alt_args.xrd_vector_dim = 4096
     alt_args.max_theta = 180
     alt_args.min_theta = 0
 
@@ -368,8 +368,9 @@ def optimization(args, model, ld_kwargs, data_loader):
         os.makedirs(the_folder, exist_ok=True)
 
     # visualize filter and transform
-    angs, filter = data_loader.dataset.angs, data_loader.dataset.filter
-    plot_filter(filter, angs, filter_viz_folder)
+    if args.xrd_filter == 'sinc' or args.xrd_filter == 'both':
+        angs, sinc_filter = data_loader.dataset.angs, data_loader.dataset.sinc_filt
+        plot_filter(sinc_filter, angs, filter_viz_folder)
 
     all_gt_crystals = list()
     all_bestPred_crystals = list()
@@ -629,7 +630,7 @@ if __name__ == '__main__':
     parser.add_argument('--l1_loss', action='store_true')
     parser.add_argument('--label', default='')
     parser.add_argument('--num_candidates', default=5, type=int)
-    parser.add_argument('--xrd_filter', default='sinc')
+    parser.add_argument('--xrd_filter', default='both')
     args = parser.parse_args()
 
     print('starting eval', args)

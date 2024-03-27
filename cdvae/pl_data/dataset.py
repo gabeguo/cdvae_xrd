@@ -37,19 +37,19 @@ class CrystDataset(Dataset):
         self.graph_method = graph_method
         self.lattice_scale_method = lattice_scale_method
         self.xrd_filter = xrd_filter
-        assert self.xrd_filter in ['gaussian', 'sinc'], "invalid filter requested"
+        assert self.xrd_filter in ['gaussian', 'sinc', 'both'], "invalid filter requested"
 
         self.wavelength = WAVELENGTHS[wavesource]
         self.nanomaterial_size = nanomaterial_size_angstrom
         self.n_presubsample = n_presubsample
         self.n_postsubsample = n_postsubsample
 
-        if self.xrd_filter == 'sinc':
+        if self.xrd_filter == 'sinc' or self.xrd_filter == 'both':
             # ang units should be radians
             Q_max = 4 * np.pi / self.wavelength # sin(theta_max) = 1, since theta_max=90
             angs = np.linspace(-Q_max / 2, +Q_max / 2, self.n_presubsample)
             self.angs = angs # for logging purposes
-            self.filter = np.sinc(self.nanomaterial_size / 2 * angs)
+            self.sinc_filt = np.sinc(self.nanomaterial_size / 2 * angs)
         else:
             raise ValueError("Gaussian filter is deprecated. Use sinc filter instead.")
         
@@ -116,6 +116,19 @@ class CrystDataset(Dataset):
         )
         return data
 
+    def sinc_filter(self, x):
+        filtered = np.convolve(x, self.sinc_filt, mode='same')
+        return filtered
+    
+    def gaussian_filter(self, x):
+        filtered = gaussian_filter1d(x,
+                    sigma=np.random.uniform(
+                        low=self.n_presubsample * self.horizontal_noise_range[0], 
+                        high=self.n_presubsample * self.horizontal_noise_range[1]
+                    ), 
+                    mode='constant', cval=0)    
+        return filtered
+
     def augment_xrdStrip(self, curr_xrdStrip):
         """
         Augments curr_xrdStrip via:
@@ -125,18 +138,19 @@ class CrystDataset(Dataset):
         xrd = curr_xrdStrip.numpy()
         assert xrd.shape == (self.n_presubsample,)
         # Peak broadening
-        if self.xrd_filter == 'sinc':
-            filtered = np.convolve(xrd, self.filter, mode='same')
+        if self.xrd_filter == 'both':
+            sinc_filtered = self.sinc_filter(xrd)
+            filtered = self.gaussian_filter(sinc_filtered)
+            assert filtered.shape == xrd.shape
+        elif self.xrd_filter == 'sinc':
+            filtered = self.sinc_filter(xrd)
             assert filtered.shape == xrd.shape
         elif self.xrd_filter == 'gaussian':
-            filtered = gaussian_filter1d(xrd,
-                        sigma=np.random.uniform(
-                            low=512 * self.horizontal_noise_range[0], 
-                            high=512 * self.horizontal_noise_range[1]
-                        ), 
-                        mode='constant', cval=0)
+            filtered = self.gaussian_filter(xrd)
+            assert filtered.shape == xrd.shape
         else:
             raise ValueError("Invalid filter requested")
+
         # scale
         filtered = filtered / np.max(filtered)
         filtered = np.maximum(filtered, np.zeros_like(filtered))
@@ -228,4 +242,15 @@ def main(cfg: omegaconf.DictConfig):
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    Dataset = CrystDataset(
+        name="mp_20",
+        path="/home/tsaidi/Research/cdvae_xrd/data/mp_20/test.csv",
+        prop="xrd",
+        niggli=True,
+        primitive=True,
+        graph_method="crystalnn",
+        preprocess_workers=30,
+        lattice_scale_method="scale_length",
+        xrd_filter="both",
+    )
