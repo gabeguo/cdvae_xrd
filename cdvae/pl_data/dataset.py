@@ -14,13 +14,16 @@ import os
 from cdvae.common.utils import PROJECT_ROOT
 from cdvae.common.data_utils import (
     preprocess, preprocess_tensors, add_scaled_lattice_prop)
-
+from pymatgen.analysis.diffraction.xrd import WAVELENGTHS
 
 class CrystDataset(Dataset):
     def __init__(self, name: ValueNode, path: ValueNode,
                  prop: ValueNode, niggli: ValueNode, primitive: ValueNode,
                  graph_method: ValueNode, preprocess_workers: ValueNode,
                  lattice_scale_method: ValueNode, xrd_filter : ValueNode,
+                 nanomaterial_size_angstrom=50, # 10, 50, 100, 1000
+                 n_presubsample=4096, n_postsubsample=512,
+                 wavesource='CuKa',
                  horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
                  vertical_noise=1e-3,
                  **kwargs):
@@ -36,11 +39,17 @@ class CrystDataset(Dataset):
         self.xrd_filter = xrd_filter
         assert self.xrd_filter in ['gaussian', 'sinc'], "invalid filter requested"
 
+        self.wavelength = WAVELENGTHS[wavesource]
+        self.nanomaterial_size = nanomaterial_size_angstrom
+        self.n_presubsample = n_presubsample
+        self.n_postsubsample = n_postsubsample
+
         if self.xrd_filter == 'sinc':
             # ang units should be radians
-            angs = np.linspace(-2 * np.pi, 2*np.pi, 512)
+            Q_max = 4 * np.pi / self.wavelength # sin(theta_max) = 1, since theta_max=90
+            angs = np.linspace(-Q_max / 2, +Q_max / 2, self.n_presubsample)
             self.angs = angs # for logging purposes
-            self.filter = np.sinc(angs)
+            self.filter = np.sinc(self.nanomaterial_size / 2 * angs)
         else:
             raise ValueError("Gaussian filter is deprecated. Use sinc filter instead.")
         
@@ -62,9 +71,14 @@ class CrystDataset(Dataset):
         # smooth XRDs
         for curr_data_dict in self.cached_data:
             curr_xrd = curr_data_dict[self.prop]
-            curr_xrd = curr_xrd.reshape((512,))
+            curr_xrd = curr_xrd.reshape((self.n_presubsample,))
             curr_xrd = self.augment_xrdStrip(curr_xrd)
             curr_data_dict[self.prop] = curr_xrd
+
+    def sample(self, x):
+        step_size = int(np.ceil(len(x) / self.n_postsubsample))
+        x_subsample = [np.max(x[i:i+step_size]) for i in range(0, len(x), step_size)]
+        return np.array(x_subsample)
 
     def __len__(self) -> int:
         return len(self.cached_data)
@@ -109,7 +123,7 @@ class CrystDataset(Dataset):
         -> Adding small Gaussian perturbations to peaks (vertical)
         """
         xrd = curr_xrdStrip.numpy()
-        assert xrd.shape == (512,)
+        assert xrd.shape == (self.n_presubsample,)
         # Peak broadening
         if self.xrd_filter == 'sinc':
             filtered = np.convolve(xrd, self.filter, mode='same')
@@ -123,9 +137,16 @@ class CrystDataset(Dataset):
                         mode='constant', cval=0)
         else:
             raise ValueError("Invalid filter requested")
+        # scale
         filtered = filtered / np.max(filtered)
-        filtered = torch.from_numpy(filtered)
+        filtered = np.maximum(filtered, np.zeros_like(filtered))
+        # sample it
+        assert filtered.shape == (self.n_presubsample,)
         assert filtered.shape == curr_xrdStrip.shape
+        filtered = self.sample(filtered)
+        # convert to torch
+        filtered = torch.from_numpy(filtered)
+        assert filtered.shape == (self.n_postsubsample,)
         # Perturbation
         perturbed = filtered + torch.normal(mean=0, std=self.vertical_noise, size=filtered.size())
         perturbed = torch.maximum(perturbed, torch.zeros_like(perturbed))
