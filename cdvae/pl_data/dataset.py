@@ -72,8 +72,10 @@ class CrystDataset(Dataset):
         for curr_data_dict in self.cached_data:
             curr_xrd = curr_data_dict[self.prop]
             curr_xrd = curr_xrd.reshape((self.n_presubsample,))
-            curr_xrd = self.augment_xrdStrip(curr_xrd)
+            # have sinc with gaussian filter & sinc w/out gaussian filter
+            curr_xrd, sinc_only_xrd = self.augment_xrdStrip(curr_xrd, return_both=True)
             curr_data_dict[self.prop] = curr_xrd
+            curr_data_dict['sincOnly'] = sinc_only_xrd
 
     def sample(self, x):
         step_size = int(np.ceil(len(x) / self.n_postsubsample))
@@ -91,10 +93,20 @@ class CrystDataset(Dataset):
          to_jimages, num_atoms) = data_dict['graph_arrays']
         
         if "xrd" in data_dict.keys():
+            assert self.n_postsubsample == 512
             dim = 512
             prop = prop.view(dim, -1)
         else:
             dim = 1
+
+        # store raw sinc for plotting
+        if self.xrd_filter == 'both':
+            raw_sinc = data_dict['sincOnly']
+            assert self.n_postsubsample == 512
+            raw_sinc = raw_sinc.view(self.n_postsubsample, -1)
+        else:
+            raw_sinc = None
+
         # atom_coords are fractional coordinates
         # edge_index is incremented during batching
         # https://pytorch-geometric.readthedocs.io/en/latest/notes/batching.html
@@ -113,6 +125,7 @@ class CrystDataset(Dataset):
             mpid=data_dict['mp_id'],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
             y=prop,
+            raw_sinc=raw_sinc
         )
         return data
 
@@ -129,11 +142,19 @@ class CrystDataset(Dataset):
                     mode='constant', cval=0)    
         return filtered
 
-    def augment_xrdStrip(self, curr_xrdStrip):
+    def augment_xrdStrip(self, curr_xrdStrip, return_both=False):
         """
-        Augments curr_xrdStrip via:
-        -> Adding peak broadening (horizontal)
-        -> Adding small Gaussian perturbations to peaks (vertical)
+        Input:
+        -> curr_xrdStrip: XRD pattern of shape (self.n_presubsample,)
+        -> return_both: if True, return (bothFiltered, rawSincFiltered), only valid if self.xrd_filter == 'both';
+            if False, return based on self.xrd_filter
+        Output:
+        -> if return_both=False, 
+            returns curr_xrdStrip augmented by peak broadening (sinc and/or gaussian) & vertical Gaussian perturbations;
+            with shape (self.n_postsubsample,); in range [0, 1]
+        -> if return_both=True,
+            returns (bothFiltered, rawSincFiltered); where bothFiltered has both sinc filter & gaussian filter,
+            rawSincFiltered has only sinc filter
         """
         xrd = curr_xrdStrip.numpy()
         assert xrd.shape == (self.n_presubsample,)
@@ -150,13 +171,22 @@ class CrystDataset(Dataset):
             assert filtered.shape == xrd.shape
         else:
             raise ValueError("Invalid filter requested")
-
+                
+        assert filtered.shape == curr_xrdStrip.shape
+        filtered = self.post_process_filtered_xrd(filtered)
+        if return_both: # want to return double filtered & sinc-only filtered
+            assert self.xrd_filter == 'both'
+            assert sinc_filtered.shape == curr_xrdStrip.shape
+            sinc_only = self.post_process_filtered_xrd(sinc_filtered)
+            return filtered, sinc_only
+        return filtered
+    
+    def post_process_filtered_xrd(self, filtered):
         # scale
         filtered = filtered / np.max(filtered)
         filtered = np.maximum(filtered, np.zeros_like(filtered))
         # sample it
         assert filtered.shape == (self.n_presubsample,)
-        assert filtered.shape == curr_xrdStrip.shape
         filtered = self.sample(filtered)
         # convert to torch
         filtered = torch.from_numpy(filtered)

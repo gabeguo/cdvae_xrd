@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         '--model_path',
-        default='/home/gabeguo/hydra/singlerun/2024-03-18/mp20_sharpXRD',
+        default='/home/gabeguo/hydra/singlerun/2024-03-26/mp_20_sincFilter_size10',
         type=str,
     )
     parser.add_argument(
@@ -114,11 +114,19 @@ if __name__ == "__main__":
         batch = next(iter(data_loader)).to(model.device)
         _, _, z = model.encode(batch)
         z = z.detach()
+        print('shape before (XRD):', batch.y.shape)
         scaled_xrds = batch.y.reshape(-1, 512)
+        print('shape after (XRD):', scaled_xrds.shape)
         # inverse transform
         # model.scaler.match_device(scaled_xrds)
         # xrds = model.scaler.inverse_transform(scaled_xrds)
+        assert torch.equal(scaled_xrds[0], batch.y[:512, 0])
         xrds = scaled_xrds
+
+        print('shape before (sinc):', batch.raw_sinc.shape)
+        sinc_only = batch.raw_sinc.reshape(-1, 512)
+        print('shape after (sinc):', sinc_only.shape)
+        assert torch.equal(sinc_only[0], batch.raw_sinc[:512, 0])
 
         # plot XRDs
         print('plotting XRDs')
@@ -135,14 +143,19 @@ if __name__ == "__main__":
             os.makedirs(gt_xrd_dir, exist_ok=True)
             plot_xrds(gt_xrds, output_dir=gt_xrd_dir, num_materials=10)
 
+            sinc_only = sinc_only.detach().cpu().numpy()
+            sinc_only_dir = os.path.join(args.save_dir, 'sinc_only')
+            os.makedirs(sinc_only_dir, exist_ok=True)
+            plot_xrds(sinc_only, output_dir=sinc_only_dir, num_materials=10)
 
-        Z.append(z)
-        X.append(xrds)
+
+        # Z.append(z)
+        # X.append(xrds)
     
-    Z = torch.cat(Z, dim=0)
-    X = torch.cat(X, dim=0)
+    # Z = torch.cat(Z, dim=0)
+    # X = torch.cat(X, dim=0)
 
-    assert Z.shape == (X.shape[0], 256)
-    assert X.shape == (Z.shape[0], 512)
+    # assert Z.shape == (X.shape[0], 256)
+    # assert X.shape == (Z.shape[0], 512)
 
     # tsne(args, X=X, Z=Z)
