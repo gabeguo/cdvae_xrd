@@ -93,7 +93,7 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
     if create_xrd:
         assert len(all_coords) == len(all_xrds)
         all_xrds = torch.stack(all_xrds, dim=0).numpy()
-        assert all_xrds.shape == (len(all_coords), 512)
+        assert all_xrds.shape == (len(all_coords), args.xrd_vector_dim)
 
     return all_coords, all_atom_types, all_xrds, truncated_crystals_list
 
@@ -165,6 +165,7 @@ def plot_xrds(args, xrds, output_dir):
     return
 
 def plot_xrd_single(args, curr_xrd, output_dir, idx, filename=None):
+    plt.figure()
     assert curr_xrd.shape == (512,)
     thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
     plt.plot(thetas, curr_xrd)
