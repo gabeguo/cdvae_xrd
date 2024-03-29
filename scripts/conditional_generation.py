@@ -100,15 +100,15 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, savepath):
     thetas = [pos * 180 / len(smoothed) for pos in range(len(smoothed))]
 
     # Plot and fill the area under the first curve
-    ax.fill_between(thetas, smoothed, color="hotpink", alpha=0.1)
-    ax.plot(thetas, smoothed, color="deeppink", alpha=0.4, linewidth=1, linestyle='dashed', label="Smoothed")
+    #ax.fill_between(thetas, smoothed, color="hotpink", alpha=0.1)
+    ax.plot(thetas, smoothed, color="deeppink", alpha=0.4, linestyle='dashed', label="Smoothed")
 
     # Plot and fill the area under the second curve
-    ax.fill_between(thetas, sincPattern, color="purple", alpha=0.2)
-    ax.plot(thetas, sincPattern, color="indigo", alpha=0.6, linewidth=1, label="Sinc (Raw Nanomaterial)")
+    #ax.fill_between(thetas, sincPattern, color="purple", alpha=0.2)
+    ax.plot(thetas, sincPattern, color="indigo", alpha=0.6, label="Sinc (Raw Nanomaterial)")
 
     # Plot and fill the area under the second curve
-    ax.plot(thetas, noiselessPattern, color="crimson", alpha=0.6, linewidth=1, label="Noiseless (Ideal Material)")      
+    ax.plot(thetas, noiselessPattern, color="gray", alpha=0.8, label="Noiseless (Ideal Material)")      
 
     # Customizing the plot
     ax.set_title("XRD Patterns")
@@ -125,7 +125,7 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, savepath):
     # Display the plot
     #plt.show()
     plt.tight_layout()
-    plt.savefig(savepath)
+    plt.savefig(savepath, dpi=50)
     plt.close()
 
     return    
