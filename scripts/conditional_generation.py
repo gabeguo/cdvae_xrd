@@ -4,6 +4,8 @@ import torch
 import os
 import json
 
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -125,7 +127,7 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, savepath):
     # Display the plot
     #plt.show()
     plt.tight_layout()
-    plt.savefig(savepath, dpi=50)
+    plt.savefig(savepath)
     plt.close()
 
     return    
