@@ -72,6 +72,7 @@ class CrystDataset(Dataset):
         for curr_data_dict in self.cached_data:
             curr_xrd = curr_data_dict[self.prop]
             curr_xrd = curr_xrd.reshape((self.n_presubsample,))
+            curr_data_dict['rawXRD'] = self.sample(curr_xrd.numpy()) # need to downsample first
             # have sinc with gaussian filter & sinc w/out gaussian filter
             curr_xrd, sinc_only_xrd = self.augment_xrdStrip(curr_xrd, return_both=True)
             curr_data_dict[self.prop] = curr_xrd
@@ -125,7 +126,8 @@ class CrystDataset(Dataset):
             mpid=data_dict['mp_id'],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
             y=prop,
-            raw_sinc=raw_sinc
+            raw_sinc=raw_sinc,
+            raw_xrd=torch.tensor(data_dict['rawXRD'])
         )
         return data
 
