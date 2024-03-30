@@ -4,6 +4,8 @@ import torch
 import os
 import json
 
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -69,7 +71,7 @@ def plot_overlaid_graphs(actual, prediction_nn, prediction_simulated, savepath):
 
     # Customizing the plot
     ax.set_title("XRD Patterns")
-    ax.set_xlabel("Theta (degrees)")
+    ax.set_xlabel(r'$2\theta (^\circ)$')
     ax.set_ylabel("Scaled Intensity")
     ax.set_xlim(0, 180)  # Set x-axis limits
     ax.set_ylim(0, 1)  # Set y-axis limits
@@ -81,11 +83,54 @@ def plot_overlaid_graphs(actual, prediction_nn, prediction_simulated, savepath):
 
     # Display the plot
     #plt.show()
-    plt.savefig(savepath)
     plt.tight_layout()
+    plt.savefig(savepath)
     plt.close()
 
     return
+
+def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, savepath):
+    fig, ax = plt.subplots()
+
+    if not isinstance(smoothed, np.ndarray):
+        smoothed = torch.clone(smoothed).squeeze().detach().cpu().numpy()
+    if not isinstance(sincPattern, np.ndarray):
+        sincPattern = torch.clone(sincPattern).squeeze().detach().cpu().numpy()
+    if not isinstance(noiselessPattern, np.ndarray):
+        noiselessPattern = torch.clone(noiselessPattern).squeeze().detach().cpu().numpy()
+
+    thetas = [pos * 180 / len(smoothed) for pos in range(len(smoothed))]
+
+    # Plot and fill the area under the first curve
+    #ax.fill_between(thetas, smoothed, color="hotpink", alpha=0.1)
+    ax.plot(thetas, smoothed, color="deeppink", alpha=0.4, linestyle='dashed', label="Smoothed")
+
+    # Plot and fill the area under the second curve
+    #ax.fill_between(thetas, sincPattern, color="purple", alpha=0.2)
+    ax.plot(thetas, sincPattern, color="indigo", alpha=0.6, label="Sinc (Raw Nanomaterial)")
+
+    # Plot and fill the area under the second curve
+    ax.plot(thetas, noiselessPattern, color="gray", alpha=0.8, label="Noiseless (Ideal Material)")      
+
+    # Customizing the plot
+    ax.set_title("XRD Patterns")
+    ax.set_xlabel(r'$2\theta (\circ)$')
+    ax.set_ylabel("Scaled Intensity")
+    ax.set_xlim(0, 180)  # Set x-axis limits
+    ax.set_ylim(0, 1)  # Set y-axis limits
+    ax.set_xticks(np.arange(0, 181, 10))
+    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
+    ax.set_yticks(np.arange(0, 1.1, 0.1))  # Set horizontal gridlines every 0.1 from 0 to 1
+    ax.grid(True)  # Show gridlines
+    ax.legend()
+
+    # Display the plot
+    #plt.show()
+    plt.tight_layout()
+    plt.savefig(savepath)
+    plt.close()
+
+    return    
 
 # Thanks ChatGPT!
 def resize_image_to_same_width(image, width):
@@ -197,7 +242,9 @@ def process_candidates(args, xrd_args, j,
         opt_generated_xrds, 
         min_loss_indices, opt_material_folder, opt_xrd_folder, pred_opt_xrd_folder, opt_cif_folder, metrics_folder, subdir,
         all_bestPred_crystals,
-        target_noisy_xrd, final_pred_xrds, curr_gt_crystal, gt_atom_types,
+        target_noisy_xrd, final_pred_xrds, 
+        opt_sinc_only_xrds, noiseless_generated_xrds,
+        curr_gt_crystal, gt_atom_types,
         gt_material_filepath, gt_xrd_filepath,
         all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms):
 
@@ -241,8 +288,9 @@ def process_candidates(args, xrd_args, j,
 
         # metrics
         assert target_noisy_xrd.squeeze().shape == opt_generated_xrds[min_loss_idx].squeeze().shape
-        xrd_l1_error = F.l1_loss(target_noisy_xrd.squeeze(), opt_generated_xrds[min_loss_idx].squeeze()).item()
-        xrd_l2_error = F.mse_loss(target_noisy_xrd.squeeze(), opt_generated_xrds[min_loss_idx].squeeze()).item()
+        the_curr_opt_generated_xrd = opt_generated_xrds[min_loss_idx].to(target_noisy_xrd.device).squeeze()
+        xrd_l1_error = F.l1_loss(target_noisy_xrd.squeeze(), the_curr_opt_generated_xrd).item()
+        xrd_l2_error = F.mse_loss(target_noisy_xrd.squeeze(), the_curr_opt_generated_xrd).item()
         candidate_xrd_l1_errors.append(xrd_l1_error)
         candidate_xrd_l2_errors.append(xrd_l2_error)
         print(f'xrd l1 error: {xrd_l1_error}')
@@ -273,6 +321,12 @@ def process_candidates(args, xrd_args, j,
             prediction_nn=final_pred_xrds[min_loss_idx].detach().cpu().numpy(),
             prediction_simulated=opt_xrd,
             savepath=f'{opt_xrd_folder_cand}/candidate_{i}_overlaidXRD.png')
+     
+        # plot smoothed vs sinc: opt
+        plot_smoothed_vs_sinc(smoothed=the_curr_opt_generated_xrd, 
+                                sincPattern=opt_sinc_only_xrds[min_loss_idx], 
+                                noiselessPattern=noiseless_generated_xrds[min_loss_idx],
+                                savepath=os.path.join(opt_xrd_folder, subdir, f'candidate_{i}_sincVsSmoothed.png'))
     
     # Log the crystal with lowest RMS dist
     all_bestPred_crystals.append(best_crystal)
@@ -309,11 +363,14 @@ def create_xrd_args(args):
 
 def smooth_xrds(opt_generated_xrds, data_loader):
     smoothed_xrds = list()
+    sinc_xrds = list()
     for i in range(opt_generated_xrds.shape[0]):
-        smoothed_xrd = data_loader.dataset.augment_xrdStrip(torch.tensor(opt_generated_xrds[i,:]))
+        smoothed_xrd, sincOnly = data_loader.dataset.augment_xrdStrip(torch.tensor(opt_generated_xrds[i,:]), return_both=True)
         smoothed_xrds.append(smoothed_xrd)
+        sinc_xrds.append(sincOnly)
     opt_generated_xrds = torch.stack(smoothed_xrds, dim=0)
-    return opt_generated_xrds
+    opt_sinc_xrds = torch.stack(sinc_xrds, dim=0)
+    return opt_generated_xrds, opt_sinc_xrds
 
 def plot_filter(filter, angs, filter_viz_folder):
     dtheta = (angs[-1] - angs[0])/filter.shape[0]
@@ -395,7 +452,10 @@ def optimization(args, model, ld_kwargs, data_loader):
         mpids.append(batch.mpid[0])
         
         # get xrd
+        assert data_loader.dataset.n_postsubsample == 512
         target_noisy_xrd = batch.y.reshape(1, 512)
+        raw_sinc = batch.raw_sinc.reshape(1, 512)
+        gt_noiseless_xrd = batch.raw_xrd.reshape(1, 512)
         z = optimize_latent_code(args=args, model=model, batch=batch, target_noisy_xrd=target_noisy_xrd)
 
         # get predicted xrd for all optimized candidates
@@ -447,12 +507,21 @@ def optimization(args, model, ld_kwargs, data_loader):
         gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
         torch.save(target_noisy_xrd.squeeze().cpu(), os.path.join(gt_xrd_folder, f'material{j}.pt'))
         # apply smoothing to the XRD patterns
-        opt_generated_xrds = smooth_xrds(opt_generated_xrds=opt_generated_xrds, data_loader=data_loader).to(model.device)
+        noiseless_generated_xrds = np.array([data_loader.dataset.sample(an_xrd) for an_xrd in opt_generated_xrds.tolist()])
+        opt_generated_xrds, opt_sinc_only_xrds = smooth_xrds(opt_generated_xrds=opt_generated_xrds, data_loader=data_loader)
+        opt_generated_xrds = opt_generated_xrds.to(model.device)
+        opt_sinc_only_xrds = opt_sinc_only_xrds.to(model.device)
+        assert noiseless_generated_xrds.shape == opt_generated_xrds.shape
+        assert noiseless_generated_xrds.shape == opt_sinc_only_xrds.shape
+
+        # plot smoothed vs sinc: gt
+        plot_smoothed_vs_sinc(smoothed=target_noisy_xrd, sincPattern=raw_sinc, noiselessPattern=gt_noiseless_xrd,
+                              savepath=os.path.join(gt_xrd_folder, f'sincVsSmoothed{j}.png'))
 
         # compute loss on desired and generated xrds
         target = target_noisy_xrd.broadcast_to(bt_generated_xrds.shape[0], 512).to(model.device)
-        loss = F.l1_loss(opt_generated_xrds, target, reduction='none').mean(dim=-1) if args.l1_loss \
-            else F.mse_loss(opt_generated_xrds, target, reduction='none').mean(dim=-1)
+        loss = F.l1_loss(opt_generated_xrds.to(model.device), target.to(model.device), reduction='none').mean(dim=-1) if args.l1_loss \
+            else F.mse_loss(opt_generated_xrds.to(model.device), target.to(model.device), reduction='none').mean(dim=-1)
         
         # find the (num_candidates) minimum loss elements
         min_loss_indices = torch.argsort(loss).squeeze(0)[:args.num_candidates].tolist()
@@ -468,7 +537,9 @@ def optimization(args, model, ld_kwargs, data_loader):
                 opt_material_folder=opt_material_folder, opt_xrd_folder=opt_xrd_folder, pred_opt_xrd_folder=pred_opt_xrd_folder,
                 opt_cif_folder=opt_cif_folder, metrics_folder=metrics_folder, subdir=subdir,
                 all_bestPred_crystals=all_bestPred_crystals,
-                target_noisy_xrd=target_noisy_xrd, final_pred_xrds=final_pred_xrds, curr_gt_crystal=curr_gt_crystal, gt_atom_types=atom_types,
+                target_noisy_xrd=target_noisy_xrd, final_pred_xrds=final_pred_xrds, 
+                opt_sinc_only_xrds=opt_sinc_only_xrds, noiseless_generated_xrds=noiseless_generated_xrds,
+                curr_gt_crystal=curr_gt_crystal, gt_atom_types=atom_types,
                 gt_material_filepath=gt_material_filepath, gt_xrd_filepath=gt_xrd_filepath,
                 all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
                 all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms)
