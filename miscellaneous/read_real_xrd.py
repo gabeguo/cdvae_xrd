@@ -7,6 +7,8 @@ from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
 from pymatgen.core.structure import Structure
 from scripts.gen_xrd import create_xrd_tensor
 
+# Works on zm5036, wm6137, wm2699
+
 def get_field_value(all_lines, desired_start):
     for i, the_line in enumerate(all_lines):
         if the_line.startswith(desired_start):
@@ -14,8 +16,15 @@ def get_field_value(all_lines, desired_start):
             if len(split_line) > 1:
                 return split_line[-1]
             else:
-                all_lines[i+1]
-    return None
+                ret_val = all_lines[i+1]
+                tokens = ret_val.split()
+                for the_token in tokens:
+                    try:
+                        return float(the_token)
+                    except ValueError:
+                        continue
+                raise ValueError(f'invalid field value for {desired_start}')
+    raise ValueError(f'could not find field {desired_start}')
 
 def main(args):
     sim_wavelength = WAVELENGTHS[args.desired_wavelength]
@@ -24,10 +33,18 @@ def main(args):
         all_lines = [x.strip() for x in fin.readlines()]
         xrd_loop_start_idx = all_lines.index('loop_')
         assert xrd_loop_start_idx >= 0
-        expected_fields = ['_pd_meas_intensity_total',
-                                    '_pd_proc_ls_weight',
-                                    '_pd_proc_intensity_bkg_calc',
-                                    '_pd_calc_intensity_total']
+        if 'zm5036' in args.filepath:
+            expected_fields = ['_pd_meas_intensity_total', # '_pd_meas_intensity_total'
+                            '_pd_proc_ls_weight',
+                            '_pd_proc_intensity_bkg_calc',
+                            '_pd_calc_intensity_total']
+        elif 'wm6137' in args.filepath:
+            expected_fields = ['_pd_meas_counts_total',
+                            '_pd_proc_ls_weight',
+                            '_pd_proc_intensity_bkg_calc',
+                            '_pd_calc_intensity_total']  
+        elif 'wm2699' in args.filepath:
+            expected_fields = ['_pd_meas_counts_total', '_pd_calc_intensity_total']
         for idx in range(len(expected_fields)):
             assert expected_fields[idx] == all_lines[xrd_loop_start_idx + (idx + 1)]
         for idx in range(xrd_loop_start_idx + (len(expected_fields)+1), len(all_lines)):
@@ -63,10 +80,15 @@ def main(args):
             curr_2theta = converted_2thetas[i]
             xrd_info = xrd_intensities[i]
             xrd_info = xrd_info.split()
-            assert len(xrd_info) == len(expected_fields)
-            intensity_mean, intensity_std = xrd_info[0].split('(')
-            intensity_std = float(intensity_std[:-1])
-            intensity_mean = float(intensity_mean)
+            #print(xrd_info, expected_fields)
+            if len(xrd_info) != len(expected_fields):
+                break
+            try:
+                intensity_mean = float(xrd_info[0])
+            except ValueError:
+                intensity_mean, intensity_std = xrd_info[0].split('(')
+                intensity_std = float(intensity_std[:-1])
+                intensity_mean = float(intensity_mean)
 
             if np.isnan(curr_2theta):
                 print(f'{curr_2theta} too big: {i} out of {len(converted_2thetas)}')
@@ -74,7 +96,7 @@ def main(args):
             
             closest_tensor_idx = int((curr_2theta - args.min_2theta) / (args.max_2theta - args.min_2theta) * args.xrd_vector_dim)
             xrd_tensor[closest_tensor_idx] = max(xrd_tensor[closest_tensor_idx],
-                                                 intensity_mean + np.random.rand() * intensity_std)   
+                                                 intensity_mean)   
 
         #print(xrd_tensor)
         xrd_tensor = (xrd_tensor - torch.min(xrd_tensor)) / (torch.max(xrd_tensor) - torch.min(xrd_tensor))
@@ -103,6 +125,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--filepath',
                         type=str,
+                        #default='/home/gabeguo/experimental_cif/wm2699Isup2.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/wm6137Isup2.rtv.combined.cif')
                         default='/home/gabeguo/experimental_cif/zm5036Isup2.rtv.combined.cif')
     parser.add_argument('--desired_wavelength',
                         type=str,
