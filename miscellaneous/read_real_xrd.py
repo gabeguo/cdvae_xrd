@@ -30,10 +30,13 @@ def main(args):
                                     '_pd_calc_intensity_total']
         for idx in range(len(expected_fields)):
             assert expected_fields[idx] == all_lines[xrd_loop_start_idx + (idx + 1)]
-        start_idx = xrd_loop_start_idx + (4+1)
+        for idx in range(xrd_loop_start_idx + (len(expected_fields)+1), len(all_lines)):
+            if all_lines[idx].strip() != '':
+                start_idx = idx
+                break
+        
         end_idx = all_lines.index('', start_idx)
         assert end_idx > start_idx
-
 
         _2theta_min_deg = float(get_field_value(all_lines, '_pd_meas_2theta_range_min'))
         _2theta_max_deg = float(get_field_value(all_lines, '_pd_meas_2theta_range_max'))
@@ -47,13 +50,14 @@ def main(args):
         theta_max_rad = (_2theta_max_deg / 2) * np.pi / 180
 
         xrd_intensities = all_lines[start_idx:end_idx]
-        the_thetas = np.linspace(theta_min_rad, theta_max_rad, len(xrd_intensities))
-        print(np.min(the_thetas), np.max(the_thetas))
-        converted_2thetas = 2 * np.arcsin((np.sin(the_thetas) * sim_wavelength / _exp_wavelength)) * 180 / np.pi
-        print(np.nanmin(converted_2thetas), np.nanmax(converted_2thetas))
+        the_thetas_rad = np.linspace(theta_min_rad, theta_max_rad, len(xrd_intensities))
+        print('theta range (rad):', np.min(the_thetas_rad), np.max(the_thetas_rad))
+        converted_2thetas = 2 * np.arcsin(np.sin(the_thetas_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
+        print('2theta range (deg):', np.nanmin(converted_2thetas), np.nanmax(converted_2thetas))
         
-        corresponding_thetas = torch.zeros(args.xrd_vector_dim)
         xrd_tensor = torch.zeros(args.xrd_vector_dim)
+
+        _2thetas = np.linspace(args.min_2theta, args.max_2theta, args.xrd_vector_dim)
 
         for i in range(len(converted_2thetas)):
             curr_2theta = converted_2thetas[i]
@@ -71,11 +75,10 @@ def main(args):
             closest_tensor_idx = int((curr_2theta - args.min_2theta) / (args.max_2theta - args.min_2theta) * args.xrd_vector_dim)
             xrd_tensor[closest_tensor_idx] = max(xrd_tensor[closest_tensor_idx],
                                                  intensity_mean + np.random.rand() * intensity_std)   
-            corresponding_thetas[closest_tensor_idx] = curr_2theta 
 
         #print(xrd_tensor)
         xrd_tensor = (xrd_tensor - torch.min(xrd_tensor)) / (torch.max(xrd_tensor) - torch.min(xrd_tensor))
-        plt.plot(corresponding_thetas.detach().cpu().numpy(), xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
+        plt.plot(_2thetas, xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
         filename = args.filepath.split('/')[-1]
     
     # TODO: generate GT XRD for sanity check
@@ -87,8 +90,7 @@ def main(args):
     # Calculate the XRD pattern
     pattern = xrd_calc.get_pattern(structure)
     simulated_xrd_tensor = create_xrd_tensor(args, pattern)
-    simulated_thetas = np.linspace(args.min_2theta, args.max_2theta, simulated_xrd_tensor.shape[0])
-    plt.plot(simulated_thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
+    plt.plot(_2thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
     
     plt.legend()
     plt.savefig(f'{filename}.png')
