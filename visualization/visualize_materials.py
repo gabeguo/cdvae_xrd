@@ -93,34 +93,63 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
     if create_xrd:
         assert len(all_coords) == len(all_xrds)
         all_xrds = torch.stack(all_xrds, dim=0).numpy()
-        assert all_xrds.shape == (len(all_coords), args.xrd_vector_dim)
+        assert all_xrds.shape == (len(all_coords), 4096)
 
     return all_coords, all_atom_types, all_xrds, truncated_crystals_list
 
 
-def augment_xrdStrip(curr_xrdStrip, horizontal_noise_range=(1e-2, 1.1e-2), vertical_noise=1e-3):
-    """
-    Augments curr_xrdStrip via:
-    -> Adding Gaussian peak broadening (horizontal)
-    -> Adding small Gaussian perturbations to peaks (vertical)
-    """
-    xrd = curr_xrdStrip.numpy()
-    assert xrd.shape == (512,)
-    # Peak broadening
-    filtered = gaussian_filter1d(xrd,
+def sinc_filter(x, sinc_filt):
+    filtered = np.convolve(x, sinc_filt, mode='same')
+    return filtered
+
+def gaussian_filter(x, n_presubsample, horizontal_noise_range):
+    filtered = gaussian_filter1d(x,
                 sigma=np.random.uniform(
-                    low=512 * horizontal_noise_range[0], 
-                    high=512 * horizontal_noise_range[1]
+                    low=n_presubsample * horizontal_noise_range[0], 
+                    high=n_presubsample * horizontal_noise_range[1]
                 ), 
-                mode='constant', cval=0)
-    filtered = filtered / np.max(filtered)
-    filtered = torch.from_numpy(filtered)
-    assert filtered.shape == curr_xrdStrip.shape
-    # Perturbation
-    perturbed = filtered + torch.normal(mean=0, std=vertical_noise, size=filtered.size())
-    perturbed = torch.maximum(perturbed, torch.zeros_like(perturbed))
-    perturbed = torch.minimum(perturbed, torch.ones_like(perturbed)) # band-pass filter
-    return perturbed
+                mode='constant', cval=0)    
+    return filtered
+
+def sample(x, n_postsubsample):
+    step_size = int(np.ceil(len(x) / n_postsubsample))
+    x_subsample = [np.max(x[i:i+step_size]) for i in range(0, len(x), step_size)]
+    return np.array(x_subsample)
+
+def augment_xrdStrip(curr_xrdStrip, sinc_filt, n_presubsample=4096, n_postsubsample=512, horizontal_noise_range=(1e-2, 1.1e-2), vertical_noise=1e-3, xrd_filter='both'):
+        """
+        Augments curr_xrdStrip via:
+        -> Adding peak broadening (horizontal)
+        -> Adding small Gaussian perturbations to peaks (vertical)
+        """
+        xrd = curr_xrdStrip.numpy()
+        assert xrd.shape == (n_presubsample,)
+        # Peak broadening
+        if xrd_filter == 'both':
+            sinc_filtered = sinc_filter(xrd, sinc_filt)
+            filtered = gaussian_filter(sinc_filtered, n_presubsample, horizontal_noise_range)
+            assert filtered.shape == xrd.shape
+        elif xrd_filter == 'sinc':
+            filtered = sinc_filter(xrd)
+            assert filtered.shape == xrd.shape
+        else:
+            raise ValueError("Invalid filter requested")
+
+        # scale
+        filtered = filtered / np.max(filtered)
+        filtered = np.maximum(filtered, np.zeros_like(filtered))
+        # sample it
+        assert filtered.shape == (n_presubsample,)
+        assert filtered.shape == curr_xrdStrip.shape
+        filtered = sample(filtered)
+        # convert to torch
+        filtered = torch.from_numpy(filtered)
+        assert filtered.shape == (n_postsubsample,)
+        # Perturbation
+        perturbed = filtered + torch.normal(mean=0, std=vertical_noise, size=filtered.size())
+        perturbed = torch.maximum(perturbed, torch.zeros_like(perturbed))
+        perturbed = torch.minimum(perturbed, torch.ones_like(perturbed)) # band-pass filter
+        return perturbed
 
 # Thanks ChatGPT!
 # Function to generate sphere coordinates
@@ -165,9 +194,9 @@ def plot_xrds(args, xrds, output_dir):
     return
 
 def plot_xrd_single(args, curr_xrd, output_dir, idx, filename=None):
-    plt.figure()
     assert curr_xrd.shape == (512,)
     thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
+    plt.figure()
     plt.plot(thetas, curr_xrd)
     filename = filename if filename is not None else f'material{idx}.png'
     img_path = os.path.join(output_dir, filename)

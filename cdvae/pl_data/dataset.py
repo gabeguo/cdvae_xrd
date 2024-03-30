@@ -45,14 +45,18 @@ class CrystDataset(Dataset):
         self.n_postsubsample = n_postsubsample
 
         if self.xrd_filter == 'sinc' or self.xrd_filter == 'both':
+            phase_shift = np.pi/4
             # ang units should be radians
-            Q_max = 4 * np.pi / self.wavelength # sin(theta_max) = 1, since theta_max=90
-            angs = np.linspace(-Q_max / 2, +Q_max / 2, self.n_presubsample)
-            self.angs = angs # for logging purposes
-            self.sinc_filt = np.sinc(self.nanomaterial_size / 2 * angs)
+            self.xrd_thetas = np.linspace(0, np.pi/2, self.n_presubsample)
+            # map the thetas to Q
+            self.Qs = 4 * np.pi * np.sin(self.xrd_thetas) / self.wavelength 
+            self.Qs_shifted = 4 * np.pi * np.sin(self.xrd_thetas - phase_shift) / self.wavelength
+            
+            self.sinc_filt = np.sinc(self.nanomaterial_size / 2 * self.Qs_shifted)
+            # sinc filter is symmetric, so we can just use the first half
         else:
             raise ValueError("Gaussian filter is deprecated. Use sinc filter instead.")
-        
+
         self.horizontal_noise_range=horizontal_noise_range
         self.vertical_noise=vertical_noise
 
@@ -74,9 +78,11 @@ class CrystDataset(Dataset):
             curr_xrd = curr_xrd.reshape((self.n_presubsample,))
             curr_data_dict['rawXRD'] = self.sample(curr_xrd.numpy()) # need to downsample first
             # have sinc with gaussian filter & sinc w/out gaussian filter
-            curr_xrd, sinc_only_xrd = self.augment_xrdStrip(curr_xrd, return_both=True)
+            curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
             curr_data_dict[self.prop] = curr_xrd
             curr_data_dict['sincOnly'] = sinc_only_xrd
+            curr_data_dict['sincOnlyPresubsample'] = sinc_only_xrd_presubsample
+            curr_data_dict['xrdPresubsample'] = curr_xrd_presubsample
 
     def sample(self, x):
         step_size = int(np.ceil(len(x) / self.n_postsubsample))
@@ -105,6 +111,8 @@ class CrystDataset(Dataset):
             raw_sinc = data_dict['sincOnly']
             assert self.n_postsubsample == 512
             raw_sinc = raw_sinc.view(self.n_postsubsample, -1)
+            raw_sinc_presubsample = data_dict['sincOnlyPresubsample']
+            xrd_presubsample = data_dict['xrdPresubsample']
         else:
             raw_sinc = None
 
@@ -127,6 +135,8 @@ class CrystDataset(Dataset):
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
             y=prop,
             raw_sinc=raw_sinc,
+            raw_sinc_presubsample=raw_sinc_presubsample,
+            xrd_presubsample=xrd_presubsample,
             raw_xrd=torch.tensor(data_dict['rawXRD'])
         )
         return data
@@ -175,13 +185,23 @@ class CrystDataset(Dataset):
             raise ValueError("Invalid filter requested")
                 
         assert filtered.shape == curr_xrdStrip.shape
-        filtered = self.post_process_filtered_xrd(filtered)
+
+        # presubsamples
+        filtered_presubsample = torch.from_numpy(filtered)
+        sinc_only_presubsample = torch.from_numpy(sinc_filtered)
+
+        # postsubsampling
+        filtered_postsubsampled = self.post_process_filtered_xrd(filtered)
+
         if return_both: # want to return double filtered & sinc-only filtered
             assert self.xrd_filter == 'both'
             assert sinc_filtered.shape == curr_xrdStrip.shape
-            sinc_only = self.post_process_filtered_xrd(sinc_filtered)
-            return filtered, sinc_only
-        return filtered
+            # postsubsampling
+            sinc_only_postsubsample = self.post_process_filtered_xrd(sinc_filtered)
+            assert filtered_presubsample.shape == sinc_only_presubsample.shape == (self.n_presubsample,)
+            assert filtered_postsubsampled.shape == sinc_only_postsubsample.shape == (self.n_postsubsample,)
+            return filtered_postsubsampled, sinc_only_postsubsample, filtered_presubsample, sinc_only_presubsample
+        return filtered_postsubsampled
     
     def post_process_filtered_xrd(self, filtered):
         # scale
