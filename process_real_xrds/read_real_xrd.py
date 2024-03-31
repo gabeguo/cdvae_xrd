@@ -7,7 +7,8 @@ from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
 from pymatgen.core.structure import Structure
 from scripts.gen_xrd import create_xrd_tensor
 
-# Works on zm5036, wm6137, wm2446, wm2324
+import warnings
+warnings.filterwarnings("ignore")
 
 def get_field_value(all_lines, desired_start):
     for i, the_line in enumerate(all_lines):
