@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import argparse
 import os
 import matplotlib.pyplot as plt
@@ -148,6 +149,7 @@ def find_end_of_xrd(all_lines, start_idx):
     raise ValueError('could not find end of xrd')
 
 def main(args):
+    sim_wavelength = WAVELENGTHS[args.desired_wavelength]
     assert os.path.exists(args.filepath)
     with open(args.filepath, 'r') as fin:
         all_lines = [x.strip() for x in fin.readlines()]
@@ -217,7 +219,7 @@ def main(args):
                 print(f'{curr_2theta} too big: {i} out of {len(converted_2thetas)}')
                 break
             
-            closest_tensor_idx = int(idx / len(xrd_intensities) * args.xrd_dim)
+            closest_tensor_idx = int((curr_2theta - args.min_2theta) / (args.max_2theta - args.min_2theta) * args.xrd_vector_dim)
             xrd_tensor[closest_tensor_idx] = max(xrd_tensor[closest_tensor_idx],
                                                  intensity_mean)
 
@@ -243,7 +245,6 @@ def main(args):
     plt.plot(_2thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
     
     plt.legend()
-    os.makedirs('')
     plt.savefig(f'{filename}.png')
 
     return
@@ -269,12 +270,16 @@ if __name__ == "__main__":
                         default='CuKa')
     parser.add_argument('--xrd_vector_dim',
                         type=int,
-                        default=512)
-    parser.add_argument('--min_theta',
+                        default=4096)
+    parser.add_argument('--min_2theta',
                         type=int,
                         default=0)
-    parser.add_argument('--max_theta',
+    parser.add_argument('--max_2theta',
                         type=int,
                         default=180)
     args = parser.parse_args()
+
+    setattr(args, 'min_theta', args.min_2theta)
+    setattr(args, 'max_theta', args.max_2theta)
+
     main(args)
