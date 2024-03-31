@@ -1,11 +1,11 @@
 python -W ignore conditional_generation.py \
-    --model_path /home/gabeguo/hydra/singlerun/2024-03-27/mp_20_sincSmooth100 \
+    --model_path /home/gabeguo/hydra/singlerun/2024-03-30/mp_20_sincSmooth100 \
     --num_starting_points 200 \
     --num_candidates 10 \
     --lr 0.1 \
     --min_lr 0.001 \
     --l2_penalty 1e-4 \
-    --num_tested_materials 50 \
+    --num_tested_materials 100 \
     --label sincSmooth_100 \
     --num_gradient_steps 5000 \
     --num_atom_lambda 0.1 \
