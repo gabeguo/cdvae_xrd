@@ -243,6 +243,7 @@ def main(args):
     plt.plot(_2thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
     
     plt.legend()
+    os.makedirs('')
     plt.savefig(f'{filename}.png')
 
     return
