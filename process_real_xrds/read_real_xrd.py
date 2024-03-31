@@ -25,7 +25,7 @@ def get_field_value(all_lines, desired_start, is_num=True):
                     except ValueError:
                         continue
                 if not is_num:
-                    return tokens[0]
+                    return ret_val
                 raise ValueError(f'invalid field value for {desired_start}')
     raise ValueError(f'could not find field {desired_start}')
 
@@ -65,7 +65,7 @@ def get_file_format(args):
         intensity_idx = 0
         correction_idx = None
         _2theta_idx = None
-    elif 'wm2731' in args.filepath:
+    elif any([x in args.filepath for x in ['wm2731', 'wf5122']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
                         '_pd_proc_intensity_net',                   
@@ -81,7 +81,7 @@ def get_file_format(args):
         intensity_idx = 2
         correction_idx = None
         _2theta_idx = 1      
-    elif 'wm2324' in args.filepath:
+    elif any([x in args.filepath for x in ['ks5409', 'sq3214', 'wm2324', 'wm2097']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',  
                         '_pd_proc_intensity_total',
@@ -101,7 +101,7 @@ def get_file_format(args):
         intensity_idx = 4
         correction_idx = None
         _2theta_idx = 1
-    elif any([x in args.filepath for x in ['dk5008', 'he5606', 'br1322', 'ck5030', 'gw5052']]):
+    elif any([x in args.filepath for x in ['sn5085', 'br1322', 'dk5008', 'he5606', 'br1322', 'ck5030', 'gw5052']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
                         '_pd_proc_intensity_net',
@@ -183,8 +183,14 @@ def main(args):
         xrd_intensities = all_lines[start_idx:end_idx]
         print(xrd_intensities[0])
 
-        assert get_field_value(all_lines, '_diffrn_radiation_type', is_num=False) != 'neutron'
-        _exp_wavelength = float(get_field_value(all_lines, '_diffrn_radiation_wavelength'))
+        assert 'neutron' not in get_field_value(all_lines, '_diffrn_radiation_type', is_num=False).lower()
+        try:
+            _exp_wavelength = float(get_field_value(all_lines, '_diffrn_radiation_wavelength'))
+        except ValueError as e:
+            print(f'catch {e}; trying _diffrn_radiation_type')
+            exp_radiation_type = get_field_value(all_lines, '_diffrn_radiation_type', is_num=False)
+            if exp_radiation_type == "'Cu K\\a'":
+                _exp_wavelength = WAVELENGTHS['CuKa']
         if _2theta_idx is not None:
             _2theta_min_deg = float(xrd_intensities[0].split()[_2theta_idx])
             _2theta_max_deg = float(xrd_intensities[-1].split()[_2theta_idx])
@@ -269,7 +275,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--filepath',
                         type=str,
-                        default='/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif')
+                        default='/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/wf5122ZE1_monosup4.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/wf5122ZE1_tetrsup3.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/wm2097Isup2.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/dk5084I_4sup10.rtv.combined.cif')
+                        #default='/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif')
                         #default='/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif')
                         #default='/home/gabeguo/experimental_cif/ra5050Isup2.rtv.combined.cif')
                         #default='/home/gabeguo/experimental_cif/os0043108Ksup3.rtv.combined.cif')
