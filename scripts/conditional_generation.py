@@ -365,7 +365,7 @@ def smooth_xrds(opt_generated_xrds, data_loader):
     smoothed_xrds = list()
     sinc_xrds = list()
     for i in range(opt_generated_xrds.shape[0]):
-        smoothed_xrd, sincOnly = data_loader.dataset.augment_xrdStrip(torch.tensor(opt_generated_xrds[i,:]), return_both=True)
+        smoothed_xrd, sincOnly, _, _ = data_loader.dataset.augment_xrdStrip(torch.tensor(opt_generated_xrds[i,:]), return_both=True)
         smoothed_xrds.append(smoothed_xrd)
         sinc_xrds.append(sincOnly)
     opt_generated_xrds = torch.stack(smoothed_xrds, dim=0)
@@ -375,11 +375,15 @@ def smooth_xrds(opt_generated_xrds, data_loader):
 def plot_filter(filter, Qs, filter_viz_folder):
     dQ = (Qs[-1] - Qs[0])/filter.shape[0]
     # plot filter
-    plt.figure()
-    plt.plot(Qs, filter)
-    plt.xlabel('Q (Angstroms^-1)')
-    plt.ylabel('filter value')
-    plt.title('Sinc filter (Q-space)')
+    fig, ax = plt.subplots()
+    ax.plot(Qs, filter)
+    ax.set_xlabel(r'Q $({A^{\circ}}^{-1})$')
+    ax.set_ylabel('Filter value')
+    ax.set_xticks(np.arange(-6, 6, 1))
+    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
+    ax.set_yticks(np.arange(-0.3, 1.1, 0.1))  # Set horizontal gridlines every 0.1 from 0 to 1
+    ax.grid(True)  # Show gridlines
+    plt.tight_layout()
     plt.savefig(f'{filter_viz_folder}/filter_Q.png')
 
     # plot filter in frequency domain
@@ -392,11 +396,16 @@ def plot_filter(filter, Qs, filter_viz_folder):
     # shift the frequencies
     freq_shifted = np.fft.fftshift(freq)
     # scale and plot
-    plt.figure()
-    plt.plot(freq_shifted, dQ * np.real(F_shifted))
-    plt.xlabel('Spatial (Angstroms)')
-    plt.ylabel('Amplitude')
-    plt.title('Sinc filter (spatial domain)')
+    fig, ax = plt.subplots()
+    ax.plot(freq_shifted, dQ * np.real(F_shifted))
+    ax.set_xlabel(r'Spatial $(A^{\circ})$')
+    ax.set_ylabel('Amplitude')
+
+    ax.set_xticks(np.arange(-175, 175, 25))
+    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
+    ax.set_yticks(np.arange(-0.01, 0.05, 0.01))  # Set horizontal gridlines every 0.1 from 0 to 1
+    ax.grid(True)  # Show gridlines
+    plt.tight_layout()
     plt.savefig(f'{filter_viz_folder}/filter_spatial.png')
     plt.close()
 
