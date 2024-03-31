@@ -6,7 +6,7 @@ python -W ignore conditional_generation.py \
     --min_lr 0.001 \
     --l2_penalty 1e-4 \
     --num_tested_materials 100 \
-    --label sincSmooth_100 \
+    --label sincSmooth_100_CORRECT \
     --num_gradient_steps 5000 \
     --num_atom_lambda 0.1 \
     --composition_lambda 0.1 \
