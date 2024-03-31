@@ -245,7 +245,7 @@ def main(args):
     plt.plot(_2thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
     
     plt.legend()
-    plt.savefig(f'{filename}.png')
+    plt.savefig(os.path.join(args.output_dir, f'{filename}.png'))
 
     return
 
@@ -277,7 +277,12 @@ if __name__ == "__main__":
     parser.add_argument('--max_2theta',
                         type=int,
                         default=180)
+    parser.add_argument('--output_dir',
+                        type=str,
+                        default='xrd_images')
     args = parser.parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=True)
 
     setattr(args, 'min_theta', args.min_2theta)
     setattr(args, 'max_theta', args.max_2theta)
