@@ -194,6 +194,7 @@ def plot_xrds(args, xrds, output_dir):
     return
 
 def plot_xrd_single(args, curr_xrd, output_dir, idx, filename=None):
+    plt.figure()
     assert curr_xrd.shape == (512,)
     thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
     plt.figure()
