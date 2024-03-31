@@ -7,10 +7,10 @@ from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
 from pymatgen.core.structure import Structure
 from scripts.gen_xrd import create_xrd_tensor
 
-import warnings
-warnings.filterwarnings("ignore")
+# import warnings
+# warnings.filterwarnings("ignore")
 
-def get_field_value(all_lines, desired_start):
+def get_field_value(all_lines, desired_start, is_num=True):
     for i, the_line in enumerate(all_lines):
         if the_line.startswith(desired_start):
             split_line = the_line.split()
@@ -24,6 +24,8 @@ def get_field_value(all_lines, desired_start):
                         return float(the_token)
                     except ValueError:
                         continue
+                if not is_num:
+                    return tokens[0]
                 raise ValueError(f'invalid field value for {desired_start}')
     raise ValueError(f'could not find field {desired_start}')
 
@@ -35,15 +37,15 @@ def find_index_of_xrd_loop(all_lines):
 
 def get_file_format(args):
     if 'zm5036' in args.filepath:
-        expected_fields = ['_pd_meas_intensity_total', # '_pd_meas_intensity_total'
+        expected_fields = ['_pd_meas_intensity_total',
                         '_pd_proc_ls_weight',
                         '_pd_proc_intensity_bkg_calc',
                         '_pd_calc_intensity_total']
         intensity_idx = 0
         correction_idx = 2
         _2theta_idx = None
-    elif 'os0043108' in args.filepath:
-        expected_fields = ['_pd_meas_intensity_total', # '_pd_meas_intensity_total'
+    elif any([x in args.filepath for x in ['os0043108', 'sn0038Isup']]):
+        expected_fields = ['_pd_meas_intensity_total',
                         '_pd_proc_ls_weight',
                         '_pd_proc_intensity_calc_bkg',
                         '_pd_calc_intensity_total']
@@ -99,7 +101,7 @@ def get_file_format(args):
         intensity_idx = 4
         correction_idx = None
         _2theta_idx = 1
-    elif any([x in args.filepath for x in ['he5606', 'br1322', 'ck5030', 'gw5052']]):
+    elif any([x in args.filepath for x in ['dk5008', 'he5606', 'br1322', 'ck5030', 'gw5052']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
                         '_pd_proc_intensity_net',
@@ -136,9 +138,19 @@ def get_file_format(args):
                         '_pd_proc_intensity_bkg_calc',
                         '_pd_calc_intensity_total']
         intensity_idx = 2
+        correction_idx = 4
+        _2theta_idx = None
+    elif 'ko5041YMO-1400Ksup4' in args.filepath:
+        expected_fields = ['_pd_meas_time_of_flight',
+                        '_pd_proc_d_spacing',
+                        '_pd_meas_intensity_total',
+                        '_pd_proc_intensity_total',
+                        '_pd_proc_ls_weight',
+                        '_pd_proc_intensity_bkg_calc',
+                        '_pd_calc_intensity_total']
+        intensity_idx = 3
         correction_idx = None
         _2theta_idx = None
-    
     return expected_fields, intensity_idx, correction_idx, _2theta_idx
 
 def find_end_of_xrd(all_lines, start_idx):
@@ -171,6 +183,7 @@ def main(args):
         xrd_intensities = all_lines[start_idx:end_idx]
         print(xrd_intensities[0])
 
+        assert get_field_value(all_lines, '_diffrn_radiation_type', is_num=False) != 'neutron'
         _exp_wavelength = float(get_field_value(all_lines, '_diffrn_radiation_wavelength'))
         if _2theta_idx is not None:
             _2theta_min_deg = float(xrd_intensities[0].split()[_2theta_idx])
@@ -179,9 +192,9 @@ def main(args):
             _2theta_min_deg = float(get_field_value(all_lines, '_pd_meas_2theta_range_min'))
             _2theta_max_deg = float(get_field_value(all_lines, '_pd_meas_2theta_range_max'))
 
-        print(_2theta_min_deg)
-        print(_2theta_max_deg)
-        print(_exp_wavelength)
+        print('min 2 theta', _2theta_min_deg)
+        print('max 2 theta', _2theta_max_deg)
+        print('experimental wavlength', _exp_wavelength)
 
         theta_min_rad = (_2theta_min_deg / 2) * np.pi / 180
         theta_max_rad = (_2theta_max_deg / 2) * np.pi / 180
@@ -256,8 +269,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--filepath',
                         type=str,
-                        default='/home/gabeguo/experimental_cif/he5606SrLaMgRuO6_300Ksup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif')
+                        default='/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif')
                         #default='/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif')
                         #default='/home/gabeguo/experimental_cif/ra5050Isup2.rtv.combined.cif')
                         #default='/home/gabeguo/experimental_cif/os0043108Ksup3.rtv.combined.cif')
