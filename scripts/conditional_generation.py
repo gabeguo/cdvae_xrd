@@ -372,15 +372,15 @@ def smooth_xrds(opt_generated_xrds, data_loader):
     opt_sinc_xrds = torch.stack(sinc_xrds, dim=0)
     return opt_generated_xrds, opt_sinc_xrds
 
-def plot_filter(filter, angs, filter_viz_folder):
-    dtheta = (angs[-1] - angs[0])/filter.shape[0]
+def plot_filter(filter, Qs, filter_viz_folder):
+    dQ = (Qs[-1] - Qs[0])/filter.shape[0]
     # plot filter
     plt.figure()
-    plt.plot(angs, filter)
-    plt.xlabel('theta (rad)')
+    plt.plot(Qs, filter)
+    plt.xlabel('Q (Angstroms^-1)')
     plt.ylabel('filter value')
-    plt.title('Sinc filter (spatial domain)')
-    plt.savefig(f'{filter_viz_folder}/filter_spatial.png')
+    plt.title('Sinc filter (Q-space)')
+    plt.savefig(f'{filter_viz_folder}/filter_Q.png')
 
     # plot filter in frequency domain
     # inverse shift the signal and fourier transform to freq domain
@@ -388,16 +388,16 @@ def plot_filter(filter, angs, filter_viz_folder):
     # shift the signal back in freq domain
     F_shifted = np.fft.fftshift(F)
     # calculate frequency bins
-    freq = np.fft.fftfreq(filter.shape[0], dtheta)
+    freq = np.fft.fftfreq(filter.shape[0], dQ)
     # shift the frequencies
     freq_shifted = np.fft.fftshift(freq)
     # scale and plot
     plt.figure()
-    plt.plot(freq_shifted, dtheta * np.real(F_shifted))
-    plt.xlabel('Frequency (1/rad)')
+    plt.plot(freq_shifted, dQ * np.real(F_shifted))
+    plt.xlabel('Spatial (Angstroms)')
     plt.ylabel('Amplitude')
-    plt.title('Sinc filter (frequency domain)')
-    plt.savefig(f'{filter_viz_folder}/filter_freq.png')
+    plt.title('Sinc filter (spatial domain)')
+    plt.savefig(f'{filter_viz_folder}/filter_spatial.png')
     plt.close()
 
 def optimization(args, model, ld_kwargs, data_loader):
@@ -426,8 +426,8 @@ def optimization(args, model, ld_kwargs, data_loader):
 
     # visualize filter and transform
     if args.xrd_filter == 'sinc' or args.xrd_filter == 'both':
-        angs, sinc_filter = data_loader.dataset.angs, data_loader.dataset.sinc_filt
-        plot_filter(sinc_filter, angs, filter_viz_folder)
+        Qs_shifted, sinc_filter = data_loader.dataset.Qs_shifted, data_loader.dataset.sinc_filt
+        plot_filter(sinc_filter, Qs_shifted, filter_viz_folder)
 
     all_gt_crystals = list()
     all_bestPred_crystals = list()
