@@ -322,7 +322,6 @@ if __name__ == "__main__":
         '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/wm2097Isup2.rtv.combined.cif',
         #'/home/gabeguo/experimental_cif/dk5084I_4sup10.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/ra5050Isup2.rtv.combined.cif',
         #'/home/gabeguo/experimental_cif/os0043108Ksup3.rtv.combined.cif',
