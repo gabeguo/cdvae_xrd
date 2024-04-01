@@ -282,20 +282,26 @@ def create_data(args, filepath):
     pretty_formula = structure.composition.reduced_formula
 
     # Elements
-    all_atoms = [element.symbol for site in structure.sites for element in site.species.elements]
-    print(f'\tnum atoms: {len(all_atoms)}')
-    unique_elements = list(set([element.symbol for element in structure.composition.elements]))
+    #all_atoms = [element.symbol for site in structure.sites for element in site.species.elements]
+    #print(f'\tnum atoms: {len(all_atoms)}')
+    #unique_elements = list(set([element.symbol for element in structure.composition.elements]))
+    unique_elements = list(set([str(element) for element in structure.species]))
 
     # Space Group Number
     spacegroup_analyzer = SpacegroupAnalyzer(structure)
     spacegroup_number = spacegroup_analyzer.get_space_group_number()
 
+    # sanity check that CiF works
+    temp_cif_path = os.path.join(args.output_dir, 'temp.cif')
+    structure.to(filename=temp_cif_path)
+    dummy = Structure.from_file(temp_cif_path)
     cif_writer = CifWriter(structure)
 
     # Print the extracted information
     print(f"\tPretty Formula: {pretty_formula}")
     print(f"\tElements: {unique_elements}")
     print(f"\tSpace Group Number: {spacegroup_number}")
+    print(f"\tXRD tensor shape: {xrd_tensor.shape}")
 
     return {
         'material_id': filename,
@@ -308,7 +314,7 @@ def create_data(args, filepath):
 
 if __name__ == "__main__":
     FILEPATHS = [
-        '/home/gabeguo/experimental_cif/ck5018Isup2.rtv.combined.cif',
+        #'/home/gabeguo/experimental_cif/ck5018Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/wf5122ZE1_monosup4.rtv.combined.cif',
