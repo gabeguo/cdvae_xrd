@@ -70,7 +70,7 @@ def get_file_format(args, filepath):
         intensity_idx = 0
         correction_idx = None
         _2theta_idx = None
-    elif any([x in filepath for x in ['wm2731', 'wf5122']]):
+    elif any([x in filepath for x in ['sq1033', 'wm2731', 'wf5122']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
                         '_pd_proc_intensity_net',                   
@@ -78,7 +78,7 @@ def get_file_format(args, filepath):
         intensity_idx = 2
         correction_idx = None
         _2theta_idx = 1
-    elif 'kd5052' in filepath:
+    elif any([x in filepath for x in ['kd5052']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_d_spacing',
                         '_pd_proc_intensity_net',                   
@@ -318,10 +318,11 @@ if __name__ == "__main__":
         '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/br1340Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/ck5030Vsup6.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/gw5052Mg2Sn_100K_LTsup23.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/gw5052Mg2Si_100K_LTsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/sq1033Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/iz1026Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/wm2446Isup2.rtv.combined.cif'
     ]
