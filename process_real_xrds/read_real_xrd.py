@@ -95,7 +95,7 @@ def get_file_format(args, filepath):
         intensity_idx = 2
         correction_idx = 4
         _2theta_idx = 1
-    elif 'iz1026' in filepath:
+    elif any(x in filepath for x in ['br1340', 'iz1026']):
         expected_fields = ['_pd_proc_point_id',                         
                         '_pd_proc_2theta_corrected',            
                         '_pd_proc_energy_incident',            
@@ -314,20 +314,14 @@ def create_data(args, filepath):
 
 if __name__ == "__main__":
     FILEPATHS = [
-        #'/home/gabeguo/experimental_cif/ck5018Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/br1340Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/ck5030Vsup6.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/wf5122ZE1_monosup4.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/wf5122ZE1_tetrsup3.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/wm2097Isup2.rtv.combined.cif',
-        #'/home/gabeguo/experimental_cif/dk5084I_4sup10.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/ra5050Isup2.rtv.combined.cif',
-        #'/home/gabeguo/experimental_cif/os0043108Ksup3.rtv.combined.cif',
-        #'/home/gabeguo/experimental_cif/dk5084I_2sup8.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/ck5030Vsup6.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/gw5052Mg2Sn_100K_LTsup23.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/gw5052Mg2Si_100K_LTsup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/iz1026Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/wm2446Isup2.rtv.combined.cif'
     ]
