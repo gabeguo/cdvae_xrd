@@ -652,7 +652,8 @@ def check_structure_match(gt_structures, pred_structures):
     return {'match_rate': match_rate,
             'rms_dist': mean_rms_dist}
     """
-    structure_evaluator = RecEval(pred_crys=pred_structures, gt_crys=gt_structures)
+    structure_evaluator = RecEval(pred_crys=pred_structures, gt_crys=gt_structures, 
+                                  stol=0.3, angle_tol=5, ltol=0.2)
     match_rate_rms_dict = structure_evaluator.get_match_rate_and_rms()
     return match_rate_rms_dict
 
