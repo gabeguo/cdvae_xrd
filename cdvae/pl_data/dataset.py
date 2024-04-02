@@ -23,6 +23,8 @@ class CrystDataset(Dataset):
                  lattice_scale_method: ValueNode, xrd_filter : ValueNode,
                  nanomaterial_size_angstrom=50, # 10, 50, 100, 1000
                  n_presubsample=4096, n_postsubsample=512,
+                 min_2_theta = 0, 
+                 max_2_theta = 180,
                  wavesource='CuKa',
                  horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
                  vertical_noise=1e-3,
@@ -45,12 +47,18 @@ class CrystDataset(Dataset):
         self.n_postsubsample = n_postsubsample
 
         if self.xrd_filter == 'sinc' or self.xrd_filter == 'both':
-            phase_shift = np.pi/4
-            # ang units should be radians
-            self.xrd_thetas = np.linspace(0, np.pi/2, self.n_presubsample)
-            # map the thetas to Q
-            self.Qs = 4 * np.pi * np.sin(self.xrd_thetas) / self.wavelength 
-            self.Qs_shifted = 4 * np.pi * np.sin(self.xrd_thetas - phase_shift) / self.wavelength
+            # compute Q range
+            min_theta = min_2_theta / 2
+            max_theta = max_2_theta / 2
+            Q_min = 4 * np.pi * np.sin(np.radians(min_theta)) / self.wavelength
+            Q_max = 4 * np.pi * np.sin(np.radians(max_theta)) / self.wavelength
+
+            # phase shift for sinc filter = half of the signed Q range
+            phase_shift = (Q_max - Q_min) / 2
+
+            # compute Qs
+            self.Qs = np.linspace(Q_min, Q_max, self.n_presubsample)
+            self.Qs_shifted = self.Qs - phase_shift            
             
             self.sinc_filt = np.sinc(self.nanomaterial_size / 2 * self.Qs_shifted)
             # sinc filter is symmetric, so we can just use the first half
