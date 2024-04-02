@@ -1,14 +1,14 @@
-CUDA_VISIBLE_DEVICES=0 python -W ignore conditional_generation.py \
-    --model_path /home/tsaidi/Research/cdvae_xrd/hydra/singlerun/2024-03-30/mp_20_sinc_filt_gauss_filt_nanomaterial_size_50 \
+python -W ignore conditional_generation.py \
+    --model_path /home/gabeguo/hydra/singlerun/2024-03-30/EXP_XRD_TEST_mp_20_sincSmooth100 \
     --num_starting_points 200 \
     --num_candidates 10 \
     --lr 0.1 \
     --min_lr 0.001 \
-    --l2_penalty 1e-4 \
-    --num_tested_materials 100 \
-    --label mp_20_sinc_filt_gauss_filt_nanomaterial_size_50 \
+    --l2_penalty 2e-4 \
+    --num_tested_materials 20 \
+    --label EXPERIMENTAL_XRD_simulate_size_100 \
     --num_gradient_steps 5000 \
     --num_atom_lambda 0.1 \
     --n_step_each 100 \
     --composition_lambda 0.1 \
-    --l1_loss \
+    --l1_loss \ 
