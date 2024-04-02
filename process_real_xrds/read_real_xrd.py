@@ -312,7 +312,7 @@ def create_data(args, filepath):
             max_val = max(max_val, intensity_mean)   
 
         #print(xrd_tensor)
-        min_val = max(min_val, 0)
+        min_val = max(min_val, 0) 
         xrd_tensor = torch.maximum((xrd_tensor - min_val) / (max_val - min_val), torch.zeros_like(xrd_tensor))
     
     structure = Structure.from_file(filepath)
