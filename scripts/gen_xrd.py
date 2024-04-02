@@ -8,15 +8,27 @@ import torch
 from tqdm import tqdm
 import argparse
 import os
+import numpy as np
 
 def create_xrd_tensor(args, pattern):
-    peak_data = torch.zeros(args.xrd_vector_dim)
-    peak_locations = pattern.x.tolist()
+    wavelength = WAVELENGTHS[args.wave_source]
+
+    # takes in a pattern (in 2theta space) and converts it to a tensor in Q space
+    peak_data = torch.zeros(args.xrd_vector_dim) # Q space
+    peak_locations_2_theta = pattern.x.tolist()
+    # convert 2theta to theta
+    peak_locations_theta = [0.5 * theta for theta in peak_locations_2_theta]
+    # convert theta to Q
+    peak_locations_Q = [4 * np.pi * np.sin(np.radians(theta)) / wavelength for theta in peak_locations_theta]
     peak_values = pattern.y.tolist()
-    for i2 in range(len(peak_locations)):
-        theta = peak_locations[i2]
+
+    # convert min and max theta to Q
+    min_Q = 4 * np.pi * np.sin(np.radians(args.min_theta / 2)) / wavelength
+    max_Q = 4 * np.pi * np.sin(np.radians(args.max_theta / 2)) / wavelength
+    for i2 in range(len(peak_locations_Q)):
+        q = peak_locations_Q[i2]
         height = peak_values[i2] / 100
-        scaled_location = int(args.xrd_vector_dim * theta / (args.max_theta - args.min_theta))
+        scaled_location = int(args.xrd_vector_dim * (q - min_Q) / (max_Q - min_Q))
         peak_data[scaled_location] = max(peak_data[scaled_location], height) # just in case really close
 
     return peak_data
@@ -75,13 +87,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
     parser.add_argument(
         '--data_dir',
-        default = '/home/gabeguo/cdvae_xrd/data/mp_20_oldSplit/no_xrd',
+        default = '/home/tsaidi/Research/cdvae_xrd/data/mp_20_oldSplit/no_xrd',
         type=str,
         help='path to input CIF files'
     )
     parser.add_argument(
         '--save_dir',
-        default = '/home/gabeguo/cdvae_xrd/data/mp_20_oldSplit',
+        default = '/home/tsaidi/Research/cdvae_xrd/data/mp_20_oldSplit',
         type=str,
         help='path to save XRD patterns'
     )
