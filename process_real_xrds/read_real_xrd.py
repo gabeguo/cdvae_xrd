@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
 from pymatgen.core.structure import Structure
 from scripts.gen_xrd import create_xrd_tensor
+import pandas as pd
+from pymatgen.core import Structure
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.io.cif import CifWriter
+from tqdm import tqdm
 
 # import warnings
 # warnings.filterwarnings("ignore")
@@ -31,12 +36,12 @@ def get_field_value(all_lines, desired_start, is_num=True):
 
 def find_index_of_xrd_loop(all_lines):
     for i in range(len(all_lines) - 1):
-        if all_lines[i] == 'loop_' and '_pd_' in all_lines[i+1]:
+        if all_lines[i] == 'loop_' and ('_pd_' in all_lines[i+1]):
             return i
     raise ValueError('could not find XRD loop')
 
-def get_file_format(args):
-    if 'zm5036' in args.filepath:
+def get_file_format(args, filepath):
+    if 'zm5036' in filepath:
         expected_fields = ['_pd_meas_intensity_total',
                         '_pd_proc_ls_weight',
                         '_pd_proc_intensity_bkg_calc',
@@ -44,7 +49,7 @@ def get_file_format(args):
         intensity_idx = 0
         correction_idx = 2
         _2theta_idx = None
-    elif any([x in args.filepath for x in ['os0043108', 'sn0038Isup']]):
+    elif any([x in filepath for x in ['os0043108', 'sn0038Isup']]):
         expected_fields = ['_pd_meas_intensity_total',
                         '_pd_proc_ls_weight',
                         '_pd_proc_intensity_calc_bkg',
@@ -52,7 +57,7 @@ def get_file_format(args):
         intensity_idx = 0
         correction_idx = 2
         _2theta_idx = None
-    elif any([x in args.filepath for x in ['av5088sup4', 'wm6137', 'wm2446', 'zb5035']]):
+    elif any([x in filepath for x in ['av5088sup4', 'wm6137', 'wm2446', 'zb5035']]):
         expected_fields = ['_pd_meas_counts_total',
                         '_pd_proc_ls_weight',
                         '_pd_proc_intensity_bkg_calc',
@@ -60,12 +65,12 @@ def get_file_format(args):
         intensity_idx = 0
         correction_idx = 2
         _2theta_idx = None
-    elif 'wm2699' in args.filepath:
+    elif 'wm2699' in filepath:
         expected_fields = ['_pd_meas_counts_total', '_pd_calc_intensity_total']
         intensity_idx = 0
         correction_idx = None
         _2theta_idx = None
-    elif any([x in args.filepath for x in ['wm2731', 'wf5122']]):
+    elif any([x in filepath for x in ['sq1033', 'wm2731', 'wf5122']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
                         '_pd_proc_intensity_net',                   
@@ -73,7 +78,7 @@ def get_file_format(args):
         intensity_idx = 2
         correction_idx = None
         _2theta_idx = 1
-    elif 'kd5052' in args.filepath:
+    elif any([x in filepath for x in ['kd5052']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_d_spacing',
                         '_pd_proc_intensity_net',                   
@@ -81,7 +86,7 @@ def get_file_format(args):
         intensity_idx = 2
         correction_idx = None
         _2theta_idx = 1      
-    elif any([x in args.filepath for x in ['ks5409', 'sq3214', 'wm2324', 'wm2097']]):
+    elif any([x in filepath for x in ['ks5409', 'sq3214', 'wm2324', 'wm2097']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',  
                         '_pd_proc_intensity_total',
@@ -90,7 +95,7 @@ def get_file_format(args):
         intensity_idx = 2
         correction_idx = 4
         _2theta_idx = 1
-    elif 'iz1026' in args.filepath:
+    elif any(x in filepath for x in ['br1340', 'iz1026']):
         expected_fields = ['_pd_proc_point_id',                         
                         '_pd_proc_2theta_corrected',            
                         '_pd_proc_energy_incident',            
@@ -101,7 +106,7 @@ def get_file_format(args):
         intensity_idx = 4
         correction_idx = None
         _2theta_idx = 1
-    elif any([x in args.filepath for x in ['sn5085', 'br1322', 'dk5008', 'he5606', 'br1322', 'ck5030', 'gw5052']]):
+    elif any([x in filepath for x in ['ck5018', 'sn5085', 'br1322', 'dk5008', 'he5606', 'br1322', 'ck5030', 'gw5052']]):
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
                         '_pd_proc_intensity_net',
@@ -110,7 +115,17 @@ def get_file_format(args):
         intensity_idx = 2
         correction_idx = None
         _2theta_idx = 1
-    elif 'dk5084' in args.filepath:
+    elif 'wn6225' in filepath:
+        expected_fields = ['_pd_proc_point_id',
+                        '_pd_proc_2theta_corrected',
+                        '_pd_proc_energy_incident',
+                        '_pd_proc_d_spacing',
+                        '_pd_proc_intensity_net',
+                        '_pd_calc_intensity_net']
+        intensity_idx = 4
+        correction_idx = None
+        _2theta_idx = 1
+    elif 'dk5084' in filepath:
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
                         '_pd_proc_d_spacing',
@@ -120,7 +135,7 @@ def get_file_format(args):
         intensity_idx = 3
         correction_idx = None
         _2theta_idx = 1
-    elif 'ra5050' in args.filepath:
+    elif 'ra5050' in filepath:
         expected_fields = ['_pd_meas_2theta_scan',
                         '_pd_proc_2theta_corrected',
                         '_pd_meas_counts_total',
@@ -130,7 +145,7 @@ def get_file_format(args):
         intensity_idx = 2
         correction_idx = 4
         _2theta_idx = 0
-    elif 'hw5008PST-Ba_0.59GPasup15' in args.filepath:
+    elif 'hw5008PST-Ba_0.59GPasup15' in filepath:
         expected_fields = ['_pd_meas_time_of_flight',
                         '_pd_proc_d_spacing',
                         '_pd_meas_intensity_total',
@@ -140,7 +155,7 @@ def get_file_format(args):
         intensity_idx = 2
         correction_idx = 4
         _2theta_idx = None
-    elif 'ko5041YMO-1400Ksup4' in args.filepath:
+    elif 'ko5041YMO-1400Ksup4' in filepath:
         expected_fields = ['_pd_meas_time_of_flight',
                         '_pd_proc_d_spacing',
                         '_pd_meas_intensity_total',
@@ -151,6 +166,25 @@ def get_file_format(args):
         intensity_idx = 3
         correction_idx = None
         _2theta_idx = None
+    elif 'wh5012' in filepath:
+        expected_fields = ['_pd_proc_2theta_corrected',
+                           '_pd_proc_intensity_net']
+        intensity_idx = 1
+        correction_idx = None
+        _2theta_idx = 0
+    elif 'sh0123Xray' in filepath:
+        expected_fields = ['_pd_peak_id',
+                        '_pd_peak_2theta_centroid\\',
+                        '_pd_peak_d_spacing',
+                        '_pd_peak_pk_height',
+                        '_pd_peak_width_2theta',
+                        '_pd_peak_wavelaength_id',
+                        '_refln_index_h',  
+                        '_refln_index_k',
+                        '_refln_index_l'] 
+        intensity_idx = 3
+        correction_idx = None
+        _2theta_idx = 1
     return expected_fields, intensity_idx, correction_idx, _2theta_idx
 
 def find_end_of_xrd(all_lines, start_idx):
@@ -161,14 +195,17 @@ def find_end_of_xrd(all_lines, start_idx):
             return i
     raise ValueError('could not find end of xrd')
 
-def main(args):
+def create_data(args, filepath):
+    filename = filepath.split('/')[-1]
+    print(filename)
+
     sim_wavelength = WAVELENGTHS[args.desired_wavelength]
-    assert os.path.exists(args.filepath)
-    with open(args.filepath, 'r') as fin:
+    assert os.path.exists(filepath)
+    with open(filepath, 'r') as fin:
         all_lines = [x.strip() for x in fin.readlines()]
         xrd_loop_start_idx = find_index_of_xrd_loop(all_lines)
         assert xrd_loop_start_idx >= 0
-        expected_fields, intensity_idx, correction_idx, _2theta_idx = get_file_format(args)
+        expected_fields, intensity_idx, correction_idx, _2theta_idx = get_file_format(args, filepath)
         
         for idx in range(len(expected_fields)):
             assert expected_fields[idx] == all_lines[xrd_loop_start_idx + (idx + 1)].strip().split()[0]
@@ -181,16 +218,18 @@ def main(args):
         assert end_idx > start_idx
 
         xrd_intensities = all_lines[start_idx:end_idx]
-        print(xrd_intensities[0])
-
+        print('\t', xrd_intensities[0])
+        
         assert 'neutron' not in get_field_value(all_lines, '_diffrn_radiation_type', is_num=False).lower()
         try:
             _exp_wavelength = float(get_field_value(all_lines, '_diffrn_radiation_wavelength'))
         except ValueError as e:
-            print(f'catch {e}; trying _diffrn_radiation_type')
+            print(f'\tcatch {e}; trying _diffrn_radiation_type')
             exp_radiation_type = get_field_value(all_lines, '_diffrn_radiation_type', is_num=False)
             if exp_radiation_type == "'Cu K\\a'":
                 _exp_wavelength = WAVELENGTHS['CuKa']
+            elif exp_radiation_type == "'MoK\\a'":
+                _exp_wavelength = WAVELENGTHS['MoKa']
         if _2theta_idx is not None:
             _2theta_min_deg = float(xrd_intensities[0].split()[_2theta_idx])
             _2theta_max_deg = float(xrd_intensities[-1].split()[_2theta_idx])
@@ -198,16 +237,16 @@ def main(args):
             _2theta_min_deg = float(get_field_value(all_lines, '_pd_meas_2theta_range_min'))
             _2theta_max_deg = float(get_field_value(all_lines, '_pd_meas_2theta_range_max'))
 
-        print('min 2 theta', _2theta_min_deg)
-        print('max 2 theta', _2theta_max_deg)
-        print('experimental wavlength', _exp_wavelength)
+        print('\tmin 2 theta', _2theta_min_deg)
+        print('\tmax 2 theta', _2theta_max_deg)
+        print('\texperimental wavlength', _exp_wavelength)
 
         theta_min_rad = (_2theta_min_deg / 2) * np.pi / 180
         theta_max_rad = (_2theta_max_deg / 2) * np.pi / 180
         the_thetas_rad = np.linspace(theta_min_rad, theta_max_rad, len(xrd_intensities))
-        print('theta range (rad):', np.min(the_thetas_rad), np.max(the_thetas_rad))
+        print('\ttheta range (rad):', np.min(the_thetas_rad), np.max(the_thetas_rad))
         converted_2thetas = 2 * np.arcsin(np.sin(the_thetas_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
-        print('2theta range (deg):', np.nanmin(converted_2thetas), np.nanmax(converted_2thetas))
+        print('\t2theta range (deg):', np.nanmin(converted_2thetas), np.nanmax(converted_2thetas))
         
         xrd_tensor = torch.zeros(args.xrd_vector_dim)
 
@@ -216,9 +255,15 @@ def main(args):
         min_val = np.inf
         max_val = -np.inf
         for i in range(len(converted_2thetas)):
-            curr_2theta = converted_2thetas[i]
             xrd_info = xrd_intensities[i]
             xrd_info = xrd_info.split()
+            if _2theta_idx is not None:
+                curr_2theta_unconverted_deg = float(xrd_info[_2theta_idx])
+                curr_2theta_unconverted_rad = curr_2theta_unconverted_deg * np.pi / 180
+                curr_theta_unconverted_rad = curr_2theta_unconverted_rad / 2
+                curr_2theta = 2 * np.arcsin(np.sin(curr_theta_unconverted_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
+            else:
+                curr_2theta = converted_2thetas[i]
             #print(xrd_info, expected_fields)
             if len(xrd_info) != len(expected_fields):
                 break
@@ -236,7 +281,7 @@ def main(args):
                     pass
 
             if np.isnan(curr_2theta):
-                print(f'{curr_2theta} too big: {i} out of {len(converted_2thetas)}')
+                print(f'\t{curr_2theta} too big: {i} out of {len(converted_2thetas)}')
                 break
             
             closest_tensor_idx = int((curr_2theta - args.min_2theta) / (args.max_2theta - args.min_2theta) * args.xrd_vector_dim)
@@ -249,48 +294,80 @@ def main(args):
         #print(xrd_tensor)
         min_val = max(min_val, 0)
         xrd_tensor = torch.maximum((xrd_tensor - min_val) / (max_val - min_val), torch.zeros_like(xrd_tensor))
+    
+    structure = Structure.from_file(filepath)
+    print(f'\t{len(structure.sites)} sites')
+
+    if args.plot_img:
+        # wavelength
+        curr_wavelength = WAVELENGTHS[args.desired_wavelength]
+        # Create the XRD calculator
+        xrd_calc = XRDCalculator(wavelength=curr_wavelength)
+        # Calculate the XRD pattern
+        pattern = xrd_calc.get_pattern(structure)
+        simulated_xrd_tensor = create_xrd_tensor(args, pattern)
+        plt.plot(_2thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
         plt.plot(_2thetas, xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
-        filename = args.filepath.split('/')[-1]
-    
-    # TODO: generate GT XRD for sanity check
-    structure = Structure.from_file(args.filepath)
-    print(len(structure.sites))
-    # wavelength
-    curr_wavelength = WAVELENGTHS[args.desired_wavelength]
-    # Create the XRD calculator
-    xrd_calc = XRDCalculator(wavelength=curr_wavelength)
-    # Calculate the XRD pattern
-    pattern = xrd_calc.get_pattern(structure)
-    simulated_xrd_tensor = create_xrd_tensor(args, pattern)
-    plt.plot(_2thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
-    
-    plt.legend()
-    plt.savefig(os.path.join(args.output_dir, f'{filename}.png'))
 
-    return
+        plt.legend()
+        vis_filepath = os.path.join(args.output_dir, 'vis')
+        os.makedirs(vis_filepath, exist_ok=True)
+        plt.savefig(os.path.join(vis_filepath, f'{filename}.png'))
+        plt.cla()
 
+    # Pretty formula
+    pretty_formula = structure.composition.reduced_formula
 
+    # Elements
+    #all_atoms = [element.symbol for site in structure.sites for element in site.species.elements]
+    #print(f'\tnum atoms: {len(all_atoms)}')
+    #unique_elements = list(set([element.symbol for element in structure.composition.elements]))
+    unique_elements = list(set([str(element) for element in structure.species]))
+
+    # Space Group Number
+    spacegroup_analyzer = SpacegroupAnalyzer(structure)
+    spacegroup_number = spacegroup_analyzer.get_space_group_number()
+
+    # sanity check that CiF works
+    temp_cif_path = os.path.join(args.output_dir, 'temp.cif')
+    structure.to(filename=temp_cif_path)
+    dummy = Structure.from_file(temp_cif_path)
+    cif_writer = CifWriter(structure)
+
+    # Print the extracted information
+    print(f"\tPretty Formula: {pretty_formula}")
+    print(f"\tElements: {unique_elements}")
+    print(f"\tSpace Group Number: {spacegroup_number}")
+    print(f"\tXRD tensor shape: {xrd_tensor.shape}")
+
+    return {
+        'material_id': filename,
+        'pretty_formula': pretty_formula,
+        'elements': unique_elements,
+        'cif': cif_writer.__str__(),
+        'spacegroup.number': spacegroup_number,
+        'xrd': xrd_tensor
+    }
 
 if __name__ == "__main__":
+    FILEPATHS = [
+        '/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/br1340Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/ck5030Vsup6.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/gw5052Mg2Sn_100K_LTsup23.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/gw5052Mg2Si_100K_LTsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/sh0123Xraysup5.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/sq1033Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/iz1026Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/wh5012phaseIIsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/wh5012phaseIIIsup3.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/wm2446Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/wn6225Isup2.rtv.combined.cif',
+    ]
     parser = argparse.ArgumentParser()
-    parser.add_argument('--filepath',
-                        type=str,
-                        default='/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/wf5122ZE1_monosup4.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/wf5122ZE1_tetrsup3.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/wm2097Isup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/dk5084I_4sup10.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/ra5050Isup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/os0043108Ksup3.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/dk5084I_2sup8.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/ck5030Vsup6.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/gw5052Mg2Sn_100K_LTsup23.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/iz1026Isup2.rtv.combined.cif')
-                        #default='/home/gabeguo/experimental_cif/wm2446Isup2.rtv.combined.cif')
     parser.add_argument('--desired_wavelength',
                         type=str,
                         default='CuKa')
@@ -305,7 +382,9 @@ if __name__ == "__main__":
                         default=180)
     parser.add_argument('--output_dir',
                         type=str,
-                        default='xrd_images')
+                        default='/home/gabeguo/cdvae_xrd/data/experimental_xrd')
+    parser.add_argument('--plot_img',
+                        action='store_true')
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -313,4 +392,26 @@ if __name__ == "__main__":
     setattr(args, 'min_theta', args.min_2theta)
     setattr(args, 'max_theta', args.max_2theta)
 
-    main(args)
+    output_df = pd.DataFrame({
+        'material_id': list(),
+        'pretty_formula': list(),
+        'elements': list(),
+        'cif': list(),
+        'spacegroup.number': list(),
+        'xrd': list()
+    })
+    failed_materials = 0
+    for filepath in tqdm(FILEPATHS):
+        try:
+            curr_data = create_data(args, filepath)
+            output_df = output_df.append(curr_data, ignore_index=True)
+        except AttributeError as e:
+            print(e)
+            print('abort element')
+            failed_materials += 1
+    
+    print(f'{failed_materials} out of {len(FILEPATHS)} materials failed')
+    
+    print(output_df)
+
+    output_df.to_pickle(os.path.join(args.output_dir, 'test.csv'))
