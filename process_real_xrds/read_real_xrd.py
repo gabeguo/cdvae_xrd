@@ -5,7 +5,6 @@ import os
 import matplotlib.pyplot as plt
 from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
 from pymatgen.core.structure import Structure
-from scripts.gen_xrd import create_xrd_tensor
 import pandas as pd
 from pymatgen.core import Structure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -195,6 +194,20 @@ def find_end_of_xrd(all_lines, start_idx):
             return i
     raise ValueError('could not find end of xrd')
 
+def create_xrd_tensor(args, pattern, wavelength, min_Q, max_Q):
+    peak_data = torch.zeros(args.xrd_vector_dim)
+    peak_locations_theta_deg = pattern.x / 2
+    peak_locations_theta_rad = np.radians(peak_locations_theta_deg)
+    peak_locations_Q = 4 * np.pi * np.sin(peak_locations_theta_rad) / wavelength
+    peak_values = pattern.y.tolist()
+    for i2 in range(len(peak_locations_Q)):
+        curr_Q = peak_locations_Q[i2]
+        height = peak_values[i2] / 100
+        scaled_location = int(args.xrd_vector_dim * curr_Q / (max_Q - min_Q))
+        peak_data[scaled_location] = max(peak_data[scaled_location], height) # just in case really close
+
+    return peak_data
+
 def create_data(args, filepath):
     filename = filepath.split('/')[-1]
     print(filename)
@@ -245,25 +258,33 @@ def create_data(args, filepath):
         theta_max_rad = (_2theta_max_deg / 2) * np.pi / 180
         the_thetas_rad = np.linspace(theta_min_rad, theta_max_rad, len(xrd_intensities))
         print('\ttheta range (rad):', np.min(the_thetas_rad), np.max(the_thetas_rad))
-        converted_2thetas = 2 * np.arcsin(np.sin(the_thetas_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
-        print('\t2theta range (deg):', np.nanmin(converted_2thetas), np.nanmax(converted_2thetas))
+        experimental_Qs = 4 * np.pi * np.sin(the_thetas_rad) / _exp_wavelength
+        # converted_2thetas = 2 * np.arcsin(np.sin(the_thetas_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
+        # print('\t2theta range (deg):', np.nanmin(converted_2thetas), np.nanmax(converted_2thetas))
+        print(f'\tQ range: {np.min(experimental_Qs)}, {np.max(experimental_Qs)}')
         
+        # TODO: write function for 2theta to Q
         xrd_tensor = torch.zeros(args.xrd_vector_dim)
-
-        _2thetas = np.linspace(args.min_2theta, args.max_2theta, args.xrd_vector_dim)
+        min_Q = 4 * np.pi * np.sin(np.radians(args.min_2theta / 2)) / sim_wavelength
+        max_Q = 4 * np.pi * np.sin(np.radians(args.max_2theta / 2)) / sim_wavelength
+        desired_Qs = np.linspace(min_Q, max_Q, args.xrd_vector_dim)
+        #_2thetas = np.linspace(args.min_2theta, args.max_2theta, args.xrd_vector_dim)
 
         min_val = np.inf
         max_val = -np.inf
-        for i in range(len(converted_2thetas)):
+        for i in range(len(experimental_Qs)):
             xrd_info = xrd_intensities[i]
             xrd_info = xrd_info.split()
             if _2theta_idx is not None:
                 curr_2theta_unconverted_deg = float(xrd_info[_2theta_idx])
                 curr_2theta_unconverted_rad = curr_2theta_unconverted_deg * np.pi / 180
                 curr_theta_unconverted_rad = curr_2theta_unconverted_rad / 2
-                curr_2theta = 2 * np.arcsin(np.sin(curr_theta_unconverted_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
+                curr_Q = 4 * np.pi * np.sin(curr_theta_unconverted_rad) / _exp_wavelength
+                #curr_2theta = 2 * np.arcsin(np.sin(curr_theta_unconverted_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
             else:
-                curr_2theta = converted_2thetas[i]
+                #curr_2theta = converted_2thetas[i]
+                curr_Q = experimental_Qs[i]
+            
             #print(xrd_info, expected_fields)
             if len(xrd_info) != len(expected_fields):
                 break
@@ -279,12 +300,11 @@ def create_data(args, filepath):
                     intensity_mean -= float(xrd_info[correction_idx])
                 except ValueError:
                     pass
-
-            if np.isnan(curr_2theta):
-                print(f'\t{curr_2theta} too big: {i} out of {len(converted_2thetas)}')
-                break
             
-            closest_tensor_idx = int((curr_2theta - args.min_2theta) / (args.max_2theta - args.min_2theta) * args.xrd_vector_dim)
+            closest_tensor_idx = int((curr_Q - min_Q) / (max_Q - min_Q) * args.xrd_vector_dim)
+            if closest_tensor_idx >= xrd_tensor.shape[0]:
+                print(f'\t{curr_Q} too large: {i} out of {len(experimental_Qs)}')
+                break
             xrd_tensor[closest_tensor_idx] = max(xrd_tensor[closest_tensor_idx],
                                                  intensity_mean)
 
@@ -292,7 +312,7 @@ def create_data(args, filepath):
             max_val = max(max_val, intensity_mean)   
 
         #print(xrd_tensor)
-        min_val = max(min_val, 0)
+        min_val = max(min_val, 0) 
         xrd_tensor = torch.maximum((xrd_tensor - min_val) / (max_val - min_val), torch.zeros_like(xrd_tensor))
     
     structure = Structure.from_file(filepath)
@@ -305,9 +325,9 @@ def create_data(args, filepath):
         xrd_calc = XRDCalculator(wavelength=curr_wavelength)
         # Calculate the XRD pattern
         pattern = xrd_calc.get_pattern(structure)
-        simulated_xrd_tensor = create_xrd_tensor(args, pattern)
-        plt.plot(_2thetas, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
-        plt.plot(_2thetas, xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
+        simulated_xrd_tensor = create_xrd_tensor(args, pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
+        plt.plot(desired_Qs, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
+        plt.plot(desired_Qs, xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
 
         plt.legend()
         vis_filepath = os.path.join(args.output_dir, 'vis')
