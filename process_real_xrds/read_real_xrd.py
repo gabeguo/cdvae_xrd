@@ -115,6 +115,16 @@ def get_file_format(args, filepath):
         intensity_idx = 2
         correction_idx = None
         _2theta_idx = 1
+    elif 'wn6225' in filepath:
+        expected_fields = ['_pd_proc_point_id',
+                        '_pd_proc_2theta_corrected',
+                        '_pd_proc_energy_incident',
+                        '_pd_proc_d_spacing',
+                        '_pd_proc_intensity_net',
+                        '_pd_calc_intensity_net']
+        intensity_idx = 4
+        correction_idx = None
+        _2theta_idx = 1
     elif 'dk5084' in filepath:
         expected_fields = ['_pd_proc_point_id',
                         '_pd_proc_2theta_corrected',
@@ -314,6 +324,7 @@ def create_data(args, filepath):
 
 if __name__ == "__main__":
     FILEPATHS = [
+        '//home/gabeguo/experimental_cif/wn6225Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/br1340Isup2.rtv.combined.cif',
