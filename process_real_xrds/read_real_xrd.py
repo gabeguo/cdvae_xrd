@@ -172,6 +172,19 @@ def get_file_format(args, filepath):
         intensity_idx = 1
         correction_idx = None
         _2theta_idx = 0
+    elif 'sh0123Xray' in filepath:
+        expected_fields = ['_pd_peak_id',
+                        '_pd_peak_2theta_centroid\\',
+                        '_pd_peak_d_spacing',
+                        '_pd_peak_pk_height',
+                        '_pd_peak_width_2theta',
+                        '_pd_peak_wavelaength_id',
+                        '_refln_index_h',  
+                        '_refln_index_k',
+                        '_refln_index_l'] 
+        intensity_idx = 3
+        correction_idx = None
+        _2theta_idx = 1
     return expected_fields, intensity_idx, correction_idx, _2theta_idx
 
 def find_end_of_xrd(all_lines, start_idx):
@@ -242,9 +255,15 @@ def create_data(args, filepath):
         min_val = np.inf
         max_val = -np.inf
         for i in range(len(converted_2thetas)):
-            curr_2theta = converted_2thetas[i]
             xrd_info = xrd_intensities[i]
             xrd_info = xrd_info.split()
+            if _2theta_idx is not None:
+                curr_2theta_unconverted_deg = float(xrd_info[_2theta_idx])
+                curr_2theta_unconverted_rad = curr_2theta_unconverted_deg * np.pi / 180
+                curr_theta_unconverted_rad = curr_2theta_unconverted_rad / 2
+                curr_2theta = 2 * np.arcsin(np.sin(curr_theta_unconverted_rad) * sim_wavelength / _exp_wavelength) * 180 / np.pi
+            else:
+                curr_2theta = converted_2thetas[i]
             #print(xrd_info, expected_fields)
             if len(xrd_info) != len(expected_fields):
                 break
@@ -339,6 +358,7 @@ if __name__ == "__main__":
         '/home/gabeguo/experimental_cif/gw5052Mg2Sn_100K_LTsup23.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/gw5052Mg2Si_100K_LTsup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/ks5409BTsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/sh0123Xraysup5.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/sq1033Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/iz1026Isup2.rtv.combined.cif',
