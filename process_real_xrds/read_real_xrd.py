@@ -215,6 +215,8 @@ def create_data(args, filepath):
             exp_radiation_type = get_field_value(all_lines, '_diffrn_radiation_type', is_num=False)
             if exp_radiation_type == "'Cu K\\a'":
                 _exp_wavelength = WAVELENGTHS['CuKa']
+            elif exp_radiation_type == "'MoK\\a'":
+                _exp_wavelength = WAVELENGTHS['MoKa']
         if _2theta_idx is not None:
             _2theta_min_deg = float(xrd_intensities[0].split()[_2theta_idx])
             _2theta_max_deg = float(xrd_intensities[-1].split()[_2theta_idx])
@@ -341,6 +343,7 @@ if __name__ == "__main__":
         '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/iz1026Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/wh5012phaseIIsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/wh5012phaseIIIsup3.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/wm2446Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/wn6225Isup2.rtv.combined.cif',
     ]
