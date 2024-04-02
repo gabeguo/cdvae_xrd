@@ -166,6 +166,12 @@ def get_file_format(args, filepath):
         intensity_idx = 3
         correction_idx = None
         _2theta_idx = None
+    elif 'wh5012' in filepath:
+        expected_fields = ['_pd_proc_2theta_corrected',
+                           '_pd_proc_intensity_net']
+        intensity_idx = 1
+        correction_idx = None
+        _2theta_idx = 0
     return expected_fields, intensity_idx, correction_idx, _2theta_idx
 
 def find_end_of_xrd(all_lines, start_idx):
@@ -324,7 +330,6 @@ def create_data(args, filepath):
 
 if __name__ == "__main__":
     FILEPATHS = [
-        '//home/gabeguo/experimental_cif/wn6225Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/av5088sup4.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/br1322Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/br1340Isup2.rtv.combined.cif',
@@ -335,7 +340,9 @@ if __name__ == "__main__":
         '/home/gabeguo/experimental_cif/sq1033Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/sq3214Isup2.rtv.combined.cif',
         '/home/gabeguo/experimental_cif/iz1026Isup2.rtv.combined.cif',
-        '/home/gabeguo/experimental_cif/wm2446Isup2.rtv.combined.cif'
+        '/home/gabeguo/experimental_cif/wh5012phaseIIsup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/wm2446Isup2.rtv.combined.cif',
+        '/home/gabeguo/experimental_cif/wn6225Isup2.rtv.combined.cif',
     ]
     parser = argparse.ArgumentParser()
     parser.add_argument('--desired_wavelength',
