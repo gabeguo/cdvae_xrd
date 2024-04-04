@@ -60,11 +60,10 @@ def gen_xrd(args):
                 coords_are_cartesian=False,
             )
             
-            ### @Gabe Issue when these are uncommented ###
-            # sga = SpacegroupAnalyzer(structure)
-            # conventional_structure = sga.get_conventional_standard_structure()
-            ### @Gabe Issue when these are uncommented ###
-
+            # important to use the conventional structure to ensure
+            # that peaks are labelled with the conventional Miller indices
+            sga = SpacegroupAnalyzer(structure)
+            structure = sga.get_conventional_standard_structure()
 
             # wavelength
             curr_wavelength = WAVELENGTHS[args.wave_source]
@@ -87,13 +86,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate XRD patterns from CIF descriptions')
     parser.add_argument(
         '--data_dir',
-        default = '/home/tsaidi/Research/cdvae_xrd/data/mp_20_oldSplit/no_xrd',
+        default = '/home/gabeguo/cdvae_xrd/data/mp_20_oldSplit/no_xrd',
         type=str,
         help='path to input CIF files'
     )
     parser.add_argument(
         '--save_dir',
-        default = '/home/tsaidi/Research/cdvae_xrd/data/mp_20_oldSplit',
+        default = '/home/gabeguo/cdvae_xrd/data/mp_20_oldSplit',
         type=str,
         help='path to save XRD patterns'
     )
