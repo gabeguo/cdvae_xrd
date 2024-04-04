@@ -1,5 +1,5 @@
 python -W ignore conditional_generation.py \
-    --model_path /home/gabeguo/hydra/singlerun/2024-04-03 \
+    --model_path /home/gabeguo/hydra/singlerun/2024-04-04/EXPERIMENTAL_TEST_mp_20_sincSmooth100 \
     --num_starting_points 200 \
     --num_candidates 5 \
     --lr 0.1 \
