@@ -193,15 +193,19 @@ def plot_xrds(args, xrds, output_dir):
         plt.close()
     return
 
-def plot_xrd_single(args, curr_xrd, output_dir, idx, filename=None):
+def plot_xrd_single(args, curr_xrd, output_dir, idx, filename=None, x_axis=None, x_label='2 Theta (degrees)'):
     plt.figure()
     assert curr_xrd.shape == (512,)
-    thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
+    if x_axis is None:
+        x_axis = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
     plt.figure()
-    plt.plot(thetas, curr_xrd)
+    plt.plot(x_axis, curr_xrd)
+    plt.xlabel(x_label)
+    plt.ylabel('Scaled Intensity')
     filename = filename if filename is not None else f'material{idx}.png'
     img_path = os.path.join(output_dir, filename)
     plt.savefig(img_path)
+    plt.savefig(img_path.replace('.png', '.pdf'))
     plt.close()
     return img_path
 
@@ -263,6 +267,7 @@ def plot_material_single(curr_coords, curr_atom_types, output_dir, idx=0, batch_
     filename = filename if filename is not None else f'material{idx}_sample{batch_idx}.png'
     img_path = os.path.join(output_dir, filename)
     fig.write_image(img_path)
+    fig.write_image(img_path.replace('.png', '.pdf'))
 
     return img_path
 
