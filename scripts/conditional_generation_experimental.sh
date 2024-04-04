@@ -1,12 +1,12 @@
 python -W ignore conditional_generation.py \
-    --model_path /home/gabeguo/hydra/singlerun/2024-03-30/EXP_XRD_TEST_mp_20_sincSmooth100 \
+    --model_path /home/gabeguo/hydra/singlerun/2024-04-03 \
     --num_starting_points 200 \
     --num_candidates 5 \
     --lr 0.1 \
     --min_lr 1e-4 \
     --l2_penalty 2e-4 \
     --num_tested_materials 50 \
-    --label _experimental_xrd_sinc100 \
+    --label _experimental_xrd_sinc100_CORRECT_FILTER \
     --num_gradient_steps 5000 \
     --num_atom_lambda 0.1 \
     --n_step_each 100 \
