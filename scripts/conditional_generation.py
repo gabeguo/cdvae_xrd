@@ -52,31 +52,29 @@ EPS = 1e-10
 
 # If you want to change the colors of the lines and shades, simply modify in the ax.fill_between() and ax.plot() functions
 # A list of possible colors can be found at: https://matplotlib.org/stable/gallery/color/named_colors.html
-def plot_overlaid_graphs(actual, prediction_nn, prediction_simulated, savepath):
+def plot_overlaid_graphs(actual, prediction_nn, prediction_simulated, Qs, savepath):
     fig, ax = plt.subplots()
 
-    thetas = [pos * 180 / len(actual) for pos in range(len(actual))]
-
     # Plot and fill the area under the first curve
-    ax.fill_between(thetas, actual, color="royalblue", alpha=0.2)
-    ax.plot(thetas, actual, color="blue", alpha=0.6, label="Actual")  # Curve line
+    ax.fill_between(Qs, actual, color="royalblue", alpha=0.2)
+    ax.plot(Qs, actual, color="blue", alpha=0.6, label="Actual")  # Curve line
 
     # Plot and fill the area under the second curve
-    ax.fill_between(thetas, prediction_nn, color="mistyrose", alpha=0.2)
-    ax.plot(thetas, prediction_nn, color="red", alpha=0.6, linestyle='dotted', linewidth=2, label="Prediction (NN)")  # Dotted curve line with increased linewidth
+    ax.fill_between(Qs, prediction_nn, color="mistyrose", alpha=0.2)
+    ax.plot(Qs, prediction_nn, color="red", alpha=0.6, linestyle='dotted', linewidth=2, label="Prediction (NN)")  # Dotted curve line with increased linewidth
 
     # Plot and fill the area under the second curve
-    ax.fill_between(thetas, prediction_simulated, color="lightgreen", alpha=0.2)
-    ax.plot(thetas, prediction_simulated, color="green", alpha=0.6, linestyle='dashed', linewidth=2, label="Prediction (Simulated)")  # Dotted curve line with increased linewidth
+    ax.fill_between(Qs, prediction_simulated, color="lightgreen", alpha=0.2)
+    ax.plot(Qs, prediction_simulated, color="green", alpha=0.6, linestyle='dashed', linewidth=2, label="Prediction (Simulated)")  # Dotted curve line with increased linewidth
 
     # Customizing the plot
     ax.set_title("XRD Patterns")
-    ax.set_xlabel(r'$2\theta (^\circ)$')
+    ax.set_xlabel(r'$Q (\mathring A^{-1})$')
     ax.set_ylabel("Scaled Intensity")
-    ax.set_xlim(0, 180)  # Set x-axis limits
+    # ax.set_xlim(0, 180)  # Set x-axis limits
     ax.set_ylim(0, 1)  # Set y-axis limits
-    ax.set_xticks(np.arange(0, 181, 10))
-    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
+    # ax.set_xticks(np.arange(0, 181, 10)) 
+    # ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
     ax.set_yticks(np.arange(0, 1.1, 0.1))  # Set horizontal gridlines every 0.1 from 0 to 1
     ax.grid(True)  # Show gridlines
     ax.legend()
@@ -85,11 +83,12 @@ def plot_overlaid_graphs(actual, prediction_nn, prediction_simulated, savepath):
     #plt.show()
     plt.tight_layout()
     plt.savefig(savepath)
+    plt.savefig(savepath.replace('.png', '.pdf'))
     plt.close()
 
     return
 
-def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, savepath):
+def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, Qs, savepath):
     fig, ax = plt.subplots()
 
     if not isinstance(smoothed, np.ndarray):
@@ -99,27 +98,27 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, savepath):
     if not isinstance(noiselessPattern, np.ndarray):
         noiselessPattern = torch.clone(noiselessPattern).squeeze().detach().cpu().numpy()
 
-    thetas = [pos * 180 / len(smoothed) for pos in range(len(smoothed))]
+    assert Qs.shape == smoothed.shape
 
     # Plot and fill the area under the first curve
     #ax.fill_between(thetas, smoothed, color="hotpink", alpha=0.1)
-    ax.plot(thetas, smoothed, color="deeppink", alpha=0.4, linestyle='dashed', label="Smoothed")
+    ax.plot(Qs, smoothed, color="deeppink", alpha=0.4, linestyle='dashed', label="Smoothed")
 
     # Plot and fill the area under the second curve
     #ax.fill_between(thetas, sincPattern, color="purple", alpha=0.2)
-    ax.plot(thetas, sincPattern, color="indigo", alpha=0.6, label="Sinc (Raw Nanomaterial)")
+    ax.plot(Qs, sincPattern, color="indigo", alpha=0.6, label="Sinc (Raw Nanomaterial)")
 
     # Plot and fill the area under the second curve
-    ax.plot(thetas, noiselessPattern, color="gray", alpha=0.8, label="Noiseless (Ideal Material)")      
+    ax.plot(Qs, noiselessPattern, color="gray", alpha=0.8, label="Noiseless (Ideal Material)")      
 
     # Customizing the plot
     ax.set_title("XRD Patterns")
-    ax.set_xlabel(r'$2\theta (\circ)$')
+    ax.set_xlabel(r'$Q (\mathring A^{-1})$')
     ax.set_ylabel("Scaled Intensity")
-    ax.set_xlim(0, 180)  # Set x-axis limits
+    # ax.set_xlim(0, 180)  # Set x-axis limits
     ax.set_ylim(0, 1)  # Set y-axis limits
-    ax.set_xticks(np.arange(0, 181, 10))
-    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
+    # ax.set_xticks(np.arange(0, 181, 10))
+    # ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
     ax.set_yticks(np.arange(0, 1.1, 0.1))  # Set horizontal gridlines every 0.1 from 0 to 1
     ax.grid(True)  # Show gridlines
     ax.legend()
@@ -128,6 +127,7 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, savepath):
     #plt.show()
     plt.tight_layout()
     plt.savefig(savepath)
+    plt.savefig(savepath.replace('.png', '.pdf'))
     plt.close()
 
     return    
@@ -246,7 +246,8 @@ def process_candidates(args, xrd_args, j,
         opt_sinc_only_xrds, noiseless_generated_xrds,
         curr_gt_crystal, gt_atom_types,
         gt_material_filepath, gt_xrd_filepath,
-        all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms):
+        all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms,
+        Qs):
 
     opt_material_folder_cand = f'{opt_material_folder}/{subdir}'
     opt_xrd_folder_cand = f'{opt_xrd_folder}/{subdir}'
@@ -273,11 +274,16 @@ def process_candidates(args, xrd_args, j,
         opt_xrd = opt_generated_xrds[min_loss_idx, :].cpu().numpy()
         curr_pred_crystal = Crystal(curr_gen_crystals_list[min_loss_idx])
 
+        # TODO: fix xrd plotting
         # save the optimal crystal and its xrd
         pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder_cand, idx=j, filename=filename)
-        pred_xrd_filepath = plot_xrd_single(xrd_args, opt_xrd, opt_xrd_folder_cand, idx=j, filename=filename)
+        pred_xrd_filepath = plot_xrd_single(xrd_args, opt_xrd, opt_xrd_folder_cand, idx=j, filename=filename, x_axis=Qs, 
+                                            x_label=r'Q $({A^{\circ}}^{-1})$')
         torch.save(opt_generated_xrds[min_loss_idx, :], os.path.join(opt_xrd_folder_cand, f'candidate_{i}.pt'))
-        pred_opt_xrd_filepath = plot_xrd_single(xrd_args, final_pred_xrds[min_loss_idx].detach().cpu().numpy(), pred_opt_xrd_folder_cand, idx=j, filename=filename)
+        pred_opt_xrd_filepath = plot_xrd_single(xrd_args, final_pred_xrds[min_loss_idx].detach().cpu().numpy(), 
+                                                pred_opt_xrd_folder_cand, idx=j, 
+                                                filename=filename, x_axis=Qs,
+                                                x_label=r'Q $({A^{\circ}}^{-1})$')
         torch.save(final_pred_xrds[min_loss_idx].detach(), os.path.join(pred_opt_xrd_folder_cand, f'candidate_{i}.pt'))
         curr_pred_crystal.structure.to(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif', fmt='cif')
 
@@ -320,12 +326,14 @@ def process_candidates(args, xrd_args, j,
         plot_overlaid_graphs(actual=target_noisy_xrd.squeeze().detach().cpu().numpy(), 
             prediction_nn=final_pred_xrds[min_loss_idx].detach().cpu().numpy(),
             prediction_simulated=opt_xrd,
+            Qs=Qs,
             savepath=f'{opt_xrd_folder_cand}/candidate_{i}_overlaidXRD.png')
      
         # plot smoothed vs sinc: opt
         plot_smoothed_vs_sinc(smoothed=the_curr_opt_generated_xrd, 
                                 sincPattern=opt_sinc_only_xrds[min_loss_idx], 
                                 noiselessPattern=noiseless_generated_xrds[min_loss_idx],
+                                Qs=Qs,
                                 savepath=os.path.join(opt_xrd_folder, subdir, f'candidate_{i}_sincVsSmoothed.png'))
     
     # Log the crystal with lowest RMS dist
@@ -372,46 +380,60 @@ def smooth_xrds(opt_generated_xrds, data_loader):
     opt_sinc_xrds = torch.stack(sinc_xrds, dim=0)
     return opt_generated_xrds, opt_sinc_xrds
 
-def plot_filter(filter, Qs, filter_viz_folder):
-    dQ = (Qs[-1] - Qs[0])/filter.shape[0]
+def plot_filter(filter, Qs, filter_viz_folder, nanomaterial_size):
+    resolution = Qs.shape[0]
+    Q_min = Qs[0]
+    Q_max = Qs[-1]
+    _, ax = plt.subplots()
+    # sim_filter = nanomaterial_size * np.sinc((np.pi * nanomaterial_size * Qs)/(2 * np.pi))
+    # sim_filter = sim_filter / np.max(sim_filter)
+    filter = filter# / np.max(filter)
     # plot filter
-    fig, ax = plt.subplots()
-    ax.plot(Qs, filter)
+    # ax.plot(Qs, sim_filter, alpha=0.5, label='simulated filter')
+    ax.plot(Qs, filter, alpha=0.5) #, label='true filter')
     ax.set_xlabel(r'Q $({A^{\circ}}^{-1})$')
     ax.set_ylabel('Filter value')
-    ax.set_xticks(np.arange(-6, 6, 1))
-    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
-    ax.set_yticks(np.arange(-0.3, 1.1, 0.1))  # Set horizontal gridlines every 0.1 from 0 to 1
     ax.grid(True)  # Show gridlines
+    # ax.legend()
     plt.tight_layout()
-    plt.savefig(f'{filter_viz_folder}/filter_Q.png')
 
-    # plot filter in frequency domain
+    plt.savefig(f'{filter_viz_folder}/filter_Q.png')
+    plt.savefig(f'{filter_viz_folder}/filter_Q.pdf')
+    plt.close()
+
+    # plot filter in spatial domain
     # inverse shift the signal and fourier transform to freq domain
-    F = np.fft.fft(np.fft.ifftshift(filter))
+    F = np.fft.ifft(np.fft.fftshift(filter))
     # shift the signal back in freq domain
-    F_shifted = np.fft.fftshift(F)
+    F_shifted = np.fft.ifftshift(F)
     # calculate frequency bins
-    freq = np.fft.fftfreq(filter.shape[0], dQ)
-    # shift the frequencies
-    freq_shifted = np.fft.fftshift(freq)
+    d = -(resolution - 1) / (2 * resolution * Q_min)
+
+    spatial_bins = d * np.arange(resolution)
+    spatial_bins_shifted = spatial_bins - d * resolution / 2
     # scale and plot
-    fig, ax = plt.subplots()
-    ax.plot(freq_shifted, dQ * np.real(F_shifted))
+    _, ax = plt.subplots()
+    ax.plot(spatial_bins_shifted, np.real(F_shifted))
+    ax.set_xlim(-100, 100)
     ax.set_xlabel(r'Spatial $(A^{\circ})$')
     ax.set_ylabel('Amplitude')
-
-    ax.set_xticks(np.arange(-175, 175, 25))
-    ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
-    ax.set_yticks(np.arange(-0.01, 0.05, 0.01))  # Set horizontal gridlines every 0.1 from 0 to 1
+ 
+    # ax.set_xticks(np.arange(-5, 5, 1))
+    # ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
+    # ax.set_yticks(np.arange(-0.01, 0.05, 0.01))  # Set horizontal gridlines every 0.1 from 0 to 1
     ax.grid(True)  # Show gridlines
     plt.tight_layout()
+
     plt.savefig(f'{filter_viz_folder}/filter_spatial.png')
+    plt.savefig(f'{filter_viz_folder}/filter_spatial.pdf')
     plt.close()
 
 def optimization(args, model, ld_kwargs, data_loader):
     assert data_loader is not None
     
+    sample_factor = data_loader.dataset.n_presubsample // data_loader.dataset.n_postsubsample
+    downsampled_Qs = data_loader.dataset.Qs[::sample_factor]
+
     # assert filtering matches the configs
     assert args.xrd_filter == data_loader.dataset.xrd_filter, "XRD filter in config does not match the one in the dataset"
 
@@ -436,7 +458,9 @@ def optimization(args, model, ld_kwargs, data_loader):
     # visualize filter and transform
     if args.xrd_filter == 'sinc' or args.xrd_filter == 'both':
         Qs_shifted, sinc_filter = data_loader.dataset.Qs_shifted, data_loader.dataset.sinc_filt
-        plot_filter(sinc_filter, Qs_shifted, filter_viz_folder)
+        plot_filter(filter=sinc_filter, Qs=Qs_shifted, 
+                    filter_viz_folder=filter_viz_folder, 
+                    nanomaterial_size=data_loader.dataset.nanomaterial_size)
 
     all_gt_crystals = list()
     all_bestPred_crystals = list()
@@ -513,7 +537,9 @@ def optimization(args, model, ld_kwargs, data_loader):
         curr_gt_crystal.structure.to(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
 
         gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
-        gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, idx=j)
+        gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, 
+                                          idx=j, x_axis=downsampled_Qs,
+                                          x_label=r'Q $({A^{\circ}}^{-1})$')
         torch.save(target_noisy_xrd.squeeze().cpu(), os.path.join(gt_xrd_folder, f'material{j}.pt'))
         # apply smoothing to the XRD patterns
         noiseless_generated_xrds = np.array([data_loader.dataset.sample(an_xrd) for an_xrd in opt_generated_xrds.tolist()])
@@ -525,7 +551,7 @@ def optimization(args, model, ld_kwargs, data_loader):
 
         # plot smoothed vs sinc: gt
         plot_smoothed_vs_sinc(smoothed=target_noisy_xrd, sincPattern=raw_sinc, noiselessPattern=gt_noiseless_xrd,
-                              savepath=os.path.join(gt_xrd_folder, f'sincVsSmoothed{j}.png'))
+                              Qs=downsampled_Qs, savepath=os.path.join(gt_xrd_folder, f'sincVsSmoothed{j}.png'))
 
         # compute loss on desired and generated xrds
         target = target_noisy_xrd.broadcast_to(bt_generated_xrds.shape[0], 512).to(model.device)
@@ -551,7 +577,8 @@ def optimization(args, model, ld_kwargs, data_loader):
                 curr_gt_crystal=curr_gt_crystal, gt_atom_types=atom_types,
                 gt_material_filepath=gt_material_filepath, gt_xrd_filepath=gt_xrd_filepath,
                 all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
-                all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms)
+                all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms,
+                Qs=downsampled_Qs)
 
     ret_val = dict()
     for curr_spacegroup in set([USE_ALL_SPACEGROUPS] + spacegroups):
