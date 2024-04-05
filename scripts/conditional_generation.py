@@ -288,9 +288,9 @@ def process_candidates(args, xrd_args, j,
                                                 filename=filename, x_axis=Qs,
                                                 x_label=r'Q $({A^{\circ}}^{-1})$')
         torch.save(final_pred_xrds[min_loss_idx].detach(), os.path.join(pred_opt_xrd_folder_cand, f'candidate_{i}.pt'))
-        # pred_sga = SpacegroupAnalyzer(curr_pred_crystal.structure, symprec=0.1)
-        # curr_pred_crystal_structure = pred_sga.get_conventional_standard_structure()
-        # curr_pred_crystal_structure.to(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif', fmt='cif')
+        pred_sga = SpacegroupAnalyzer(curr_pred_crystal.structure, symprec=0.1)
+        curr_pred_crystal_structure = pred_sga.get_conventional_standard_structure()
+        curr_pred_crystal_structure.to(filename=f'{opt_cif_folder_cand}/noSpacegroup_material{j}_candidate{i}.cif', fmt='cif')
         pred_cif_writer = CifWriter(curr_pred_crystal.structure, symprec=0.1)
         pred_cif_writer.write_file(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif')
 
@@ -541,9 +541,10 @@ def optimization(args, model, ld_kwargs, data_loader):
         curr_gt_crystal = Crystal(singleton_gt_crystal_list[0])
         all_gt_crystals.append(curr_gt_crystal)
         # save cif
-        # gt_sga = SpacegroupAnalyzer(curr_gt_crystal.structure)
-        # curr_gt_crystal_structure = gt_sga.get_conventional_standard_structure()
-        # curr_gt_crystal_structure.to(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
+        gt_sga = SpacegroupAnalyzer(curr_gt_crystal.structure)
+        curr_gt_crystal_structure = gt_sga.get_conventional_standard_structure()
+        curr_gt_crystal_structure.to(filename=f'{gt_cif_folder}/noSpacegroup_material{j}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
+        # TODO: this will sometimes change the # of atoms in the outputted unit cell in the cif file
         gt_cif_writer = CifWriter(curr_gt_crystal.structure, symprec=0.01)
         gt_cif_writer.write_file(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif')
 
