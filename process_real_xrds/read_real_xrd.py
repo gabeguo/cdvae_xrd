@@ -8,7 +8,7 @@ from pymatgen.core.structure import Structure
 import pandas as pd
 from pymatgen.core import Structure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.io.cif import CifWriter
+from pymatgen.io.cif import CifWriter, CifParser
 from tqdm import tqdm
 
 # import warnings
@@ -316,7 +316,9 @@ def create_data(args, filepath):
         min_val = max(min_val, 0) 
         xrd_tensor = torch.maximum((xrd_tensor - min_val) / (max_val - min_val), torch.zeros_like(xrd_tensor))
     
-    structure = Structure.from_file(filepath)
+    cif_parser = CifParser(filepath)
+    structure = cif_parser.get_structures()[0]
+    #Structure.from_file(filepath)
     print(f'\t{len(structure.sites)} sites')
 
     if args.plot_img:

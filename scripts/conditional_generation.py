@@ -26,6 +26,9 @@ from visualization.visualize_materials import create_materials, plot_material_si
 from compute_metrics import Crystal, RecEval, GenEval
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.io.cif import CifWriter
+
 import wandb
 
 from PIL import Image
@@ -285,7 +288,11 @@ def process_candidates(args, xrd_args, j,
                                                 filename=filename, x_axis=Qs,
                                                 x_label=r'Q $({A^{\circ}}^{-1})$')
         torch.save(final_pred_xrds[min_loss_idx].detach(), os.path.join(pred_opt_xrd_folder_cand, f'candidate_{i}.pt'))
-        curr_pred_crystal.structure.to(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif', fmt='cif')
+        # pred_sga = SpacegroupAnalyzer(curr_pred_crystal.structure, symprec=0.1)
+        # curr_pred_crystal_structure = pred_sga.get_conventional_standard_structure()
+        # curr_pred_crystal_structure.to(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif', fmt='cif')
+        pred_cif_writer = CifWriter(curr_pred_crystal.structure, symprec=0.1)
+        pred_cif_writer.write_file(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif')
 
         # Log image
         log_img = collate_images(gt_material=gt_material_filepath, gt_xrd=gt_xrd_filepath,
@@ -513,7 +520,7 @@ def optimization(args, model, ld_kwargs, data_loader):
         angles = crystals['angles']
 
         all_opt_coords, all_opt_atom_types, opt_generated_xrds, curr_gen_crystals_list = create_materials(xrd_args, 
-                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
+                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True, symprec=0.1)
 
         # plot base truth
         frac_coords = batch.frac_coords
@@ -526,7 +533,7 @@ def optimization(args, model, ld_kwargs, data_loader):
         assert frac_coords.shape[0] == atom_types.shape[0]
 
         the_coords, atom_types, bt_generated_xrds, singleton_gt_crystal_list = create_materials(xrd_args, 
-                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True)
+                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True, symprec=0.01)
         the_coords = np.array(the_coords)[0]
         atom_types = np.array(atom_types)[0]
 
@@ -534,7 +541,11 @@ def optimization(args, model, ld_kwargs, data_loader):
         curr_gt_crystal = Crystal(singleton_gt_crystal_list[0])
         all_gt_crystals.append(curr_gt_crystal)
         # save cif
-        curr_gt_crystal.structure.to(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
+        # gt_sga = SpacegroupAnalyzer(curr_gt_crystal.structure)
+        # curr_gt_crystal_structure = gt_sga.get_conventional_standard_structure()
+        # curr_gt_crystal_structure.to(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
+        gt_cif_writer = CifWriter(curr_gt_crystal.structure, symprec=0.01)
+        gt_cif_writer.write_file(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif')
 
         gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
         gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, 

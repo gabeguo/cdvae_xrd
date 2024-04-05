@@ -50,7 +50,7 @@ CPK_COLORS = {
 DEFAULT_COLOR = [255, 20, 147] # Default
 DEFAULT_RADIUS = 0.1
 
-def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=False):
+def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=False, symprec=0.01):
     # wavelength
     curr_wavelength = WAVELENGTHS[args.wave_source]
     # Create the XRD calculator
@@ -69,8 +69,6 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
                 *(curr_crystal['lengths'].tolist() + curr_crystal['angles'].tolist())),
             species=curr_crystal['atom_types'], coords=curr_crystal['frac_coords'], coords_are_cartesian=False)
         
-        sga = SpacegroupAnalyzer(curr_structure)
-        curr_structure = sga.get_conventional_standard_structure()
 
         #print(curr_crystal['angles'].tolist())
         curr_coords = list()
@@ -81,8 +79,11 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
             curr_atom_types.append(Element(site.species_string))
 
         if create_xrd:
+            sga = SpacegroupAnalyzer(curr_structure, symprec=symprec)
+            conventional_structure = sga.get_conventional_standard_structure()
+            print('\n', sga.get_space_group_number(), '\n')
             # Calculate the XRD pattern
-            pattern = xrd_calc.get_pattern(curr_structure)
+            pattern = xrd_calc.get_pattern(conventional_structure)
             # Create the XRD tensor
             xrd_tensor = create_xrd_tensor(args, pattern)
             all_xrds.append(xrd_tensor)
