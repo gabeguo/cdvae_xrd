@@ -442,7 +442,7 @@ def optimization(args, model, ld_kwargs, data_loader):
     # assert filtering matches the configs
     assert args.xrd_filter == data_loader.dataset.xrd_filter, "XRD filter in config does not match the one in the dataset"
 
-    base_output_dir = f'materials_viz/{args.label}'
+    base_output_dir = f'{args.output_dir}/{args.label}'
     os.makedirs(base_output_dir, exist_ok=True)
     with open(os.path.join(base_output_dir, 'parameters.json'), 'w') as fout:
         json.dump(vars(args), fout, indent=4)
@@ -747,6 +747,7 @@ if __name__ == '__main__':
     parser.add_argument('--label', default='')
     parser.add_argument('--num_candidates', default=5, type=int)
     parser.add_argument('--xrd_filter', default='both')
+    parser.add_argument('--output_dir', default='materials_viz', type=str)
     args = parser.parse_args()
 
     print('starting eval', args)
