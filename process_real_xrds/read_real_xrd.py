@@ -215,6 +215,7 @@ def create_data(args, filepath):
     sim_wavelength = WAVELENGTHS[args.desired_wavelength]
     assert os.path.exists(filepath)
     with open(filepath, 'r') as fin:
+        print(filepath)
         all_lines = [x.strip() for x in fin.readlines()]
         xrd_loop_start_idx = find_index_of_xrd_loop(all_lines)
         assert xrd_loop_start_idx >= 0
@@ -323,11 +324,21 @@ def create_data(args, filepath):
         curr_wavelength = WAVELENGTHS[args.desired_wavelength]
         # Create the XRD calculator
         xrd_calc = XRDCalculator(wavelength=curr_wavelength)
+
         # Calculate the XRD pattern
         pattern = xrd_calc.get_pattern(structure)
         simulated_xrd_tensor = create_xrd_tensor(args, pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
         plt.plot(desired_Qs, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
         plt.plot(desired_Qs, xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
+
+        # Sanity check spacegroups
+        sga = SpacegroupAnalyzer(structure)
+        print(sga.get_crystal_system())
+        conventional_structure = sga.get_conventional_standard_structure()
+
+        alt_pattern = xrd_calc.get_pattern(conventional_structure)
+        alt_simulated_xrd_tensor = create_xrd_tensor(args, alt_pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
+        plt.plot(desired_Qs, alt_simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated (spacegroup recalc)')
 
         plt.legend()
         vis_filepath = os.path.join(args.output_dir, 'vis')
