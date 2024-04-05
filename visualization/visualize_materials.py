@@ -13,6 +13,7 @@ from scripts.eval_utils import get_crystals_list
 import warnings
 import os
 import argparse
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 # Thanks ChatGPT!
 # Thanks https://www.umass.edu/microbio/chime/pe_beta/pe/shared/cpk-rgb.htm
@@ -67,6 +68,10 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
             lattice=Lattice.from_parameters(
                 *(curr_crystal['lengths'].tolist() + curr_crystal['angles'].tolist())),
             species=curr_crystal['atom_types'], coords=curr_crystal['frac_coords'], coords_are_cartesian=False)
+        
+        sga = SpacegroupAnalyzer(curr_structure)
+        curr_structure = sga.get_conventional_standard_structure()
+
         #print(curr_crystal['angles'].tolist())
         curr_coords = list()
         curr_atom_types = list()
