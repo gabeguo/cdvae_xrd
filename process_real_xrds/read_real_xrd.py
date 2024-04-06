@@ -8,7 +8,7 @@ from pymatgen.core.structure import Structure
 import pandas as pd
 from pymatgen.core import Structure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.io.cif import CifWriter
+from pymatgen.io.cif import CifWriter, CifParser
 from tqdm import tqdm
 
 # import warnings
@@ -215,6 +215,7 @@ def create_data(args, filepath):
     sim_wavelength = WAVELENGTHS[args.desired_wavelength]
     assert os.path.exists(filepath)
     with open(filepath, 'r') as fin:
+        print(filepath)
         all_lines = [x.strip() for x in fin.readlines()]
         xrd_loop_start_idx = find_index_of_xrd_loop(all_lines)
         assert xrd_loop_start_idx >= 0
@@ -315,7 +316,9 @@ def create_data(args, filepath):
         min_val = max(min_val, 0) 
         xrd_tensor = torch.maximum((xrd_tensor - min_val) / (max_val - min_val), torch.zeros_like(xrd_tensor))
     
-    structure = Structure.from_file(filepath)
+    cif_parser = CifParser(filepath)
+    structure = cif_parser.get_structures()[0]
+    #Structure.from_file(filepath)
     print(f'\t{len(structure.sites)} sites')
 
     if args.plot_img:
@@ -323,11 +326,21 @@ def create_data(args, filepath):
         curr_wavelength = WAVELENGTHS[args.desired_wavelength]
         # Create the XRD calculator
         xrd_calc = XRDCalculator(wavelength=curr_wavelength)
+
         # Calculate the XRD pattern
         pattern = xrd_calc.get_pattern(structure)
         simulated_xrd_tensor = create_xrd_tensor(args, pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
         plt.plot(desired_Qs, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
         plt.plot(desired_Qs, xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
+
+        # Sanity check spacegroups
+        sga = SpacegroupAnalyzer(structure)
+        print(sga.get_crystal_system())
+        conventional_structure = sga.get_conventional_standard_structure()
+
+        alt_pattern = xrd_calc.get_pattern(conventional_structure)
+        alt_simulated_xrd_tensor = create_xrd_tensor(args, alt_pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
+        plt.plot(desired_Qs, alt_simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated (spacegroup recalc)')
 
         plt.legend()
         vis_filepath = os.path.join(args.output_dir, 'vis')
