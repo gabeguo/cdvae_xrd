@@ -60,7 +60,7 @@ class CrystDataset(Dataset):
             self.Qs = np.linspace(Q_min, Q_max, self.n_presubsample)
             self.Qs_shifted = self.Qs - phase_shift            
             
-            self.sinc_filt = np.sinc(self.nanomaterial_size / 2 * self.Qs_shifted)
+            self.sinc_filt = self.nanomaterial_size * np.sinc((np.pi * self.nanomaterial_size * self.Qs_shifted)/np.pi)
             # sinc filter is symmetric, so we can just use the first half
         else:
             raise ValueError("Gaussian filter is deprecated. Use sinc filter instead.")
