@@ -16,6 +16,8 @@ from cdvae.common.data_utils import (
     preprocess, preprocess_tensors, add_scaled_lattice_prop)
 from pymatgen.analysis.diffraction.xrd import WAVELENGTHS
 
+from tqdm import tqdm
+
 class CrystDataset(Dataset):
     def __init__(self, name: ValueNode, path: ValueNode,
                  prop: ValueNode, niggli: ValueNode, primitive: ValueNode,
@@ -81,7 +83,7 @@ class CrystDataset(Dataset):
         self.scaler = None
 
         # smooth XRDs
-        for curr_data_dict in self.cached_data:
+        for curr_data_dict in tqdm(self.cached_data):
             curr_xrd = curr_data_dict[self.prop]
             curr_xrd = curr_xrd.reshape((self.n_presubsample,))
             curr_data_dict['rawXRD'] = self.sample(curr_xrd.numpy()) # need to downsample first
