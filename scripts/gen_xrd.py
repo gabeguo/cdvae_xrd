@@ -9,6 +9,7 @@ from tqdm import tqdm
 import argparse
 import os
 import numpy as np
+from pymatgen.io.cif import CifParser
 
 def create_xrd_tensor(args, pattern):
     wavelength = WAVELENGTHS[args.wave_source]
@@ -51,14 +52,18 @@ def gen_xrd(args):
         xrd_tensor_list = []
         for cif in tqdm(cifs, desc=f'Generating XRDs for file {file}'):
             # Create the structure
-            crystal = Structure.from_str(cif, fmt='cif')
-            crystal = crystal.get_primitive_structure()
-            structure = Structure(
-                lattice=Lattice.from_parameters(*crystal.lattice.parameters),
-                species=crystal.species,
-                coords=crystal.frac_coords,
-                coords_are_cartesian=False,
-            )
+
+            parser = CifParser.from_string(cif)
+            structure = parser.get_structures()[0]
+
+            # crystal = Structure.from_str(cif, fmt='cif')
+            # crystal = crystal.get_primitive_structure()
+            # structure = Structure(
+            #     lattice=Lattice.from_parameters(*crystal.lattice.parameters),
+            #     species=crystal.species,
+            #     coords=crystal.frac_coords,
+            #     coords_are_cartesian=False,
+            # )
             
             # important to use the conventional structure to ensure
             # that peaks are labelled with the conventional Miller indices
