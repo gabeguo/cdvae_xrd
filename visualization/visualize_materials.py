@@ -79,9 +79,12 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
             curr_atom_types.append(Element(site.species_string))
 
         if create_xrd:
-            sga = SpacegroupAnalyzer(curr_structure, symprec=symprec)
-            conventional_structure = sga.get_conventional_standard_structure()
-            print('\n', sga.get_space_group_number(), '\n')
+            try:
+                sga = SpacegroupAnalyzer(curr_structure, symprec=symprec)
+                conventional_structure = sga.get_conventional_standard_structure()
+            except:
+                warnings.warn(f"Failed to get conventional standard structure for material {i}")
+                conventional_structure = curr_structure
             # Calculate the XRD pattern
             pattern = xrd_calc.get_pattern(conventional_structure)
             # Create the XRD tensor
