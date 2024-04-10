@@ -480,6 +480,8 @@ def optimization(args, model, ld_kwargs, data_loader):
     mpids = list()
 
     for j, batch in enumerate(data_loader):
+        if j < args.first_idx:
+            continue
         wandb.init(config=args, project='new conditional generation', name=f'crystal {j}', group=args.label)
         if j == args.num_tested_materials:
             break
@@ -748,6 +750,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_candidates', default=5, type=int)
     parser.add_argument('--xrd_filter', default='both')
     parser.add_argument('--output_dir', default='materials_viz', type=str)
+    parser.add_argument('--first_idx', default=0, type=int)
     args = parser.parse_args()
 
     print('starting eval', args)
