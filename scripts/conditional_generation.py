@@ -492,6 +492,8 @@ def optimization(args, model, ld_kwargs, data_loader):
         # get xrd
         assert data_loader.dataset.n_postsubsample == 512
         target_noisy_xrd = batch.y.reshape(1, 512)
+        target_sincOnly = batch.raw_sinc.reshape(1, 512)
+
         raw_sinc = batch.raw_sinc.reshape(1, 512)
         gt_noiseless_xrd = batch.raw_xrd.reshape(1, 512)
         z = optimize_latent_code(args=args, model=model, batch=batch, target_noisy_xrd=target_noisy_xrd)
@@ -548,7 +550,10 @@ def optimization(args, model, ld_kwargs, data_loader):
         gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, 
                                           idx=j, x_axis=downsampled_Qs,
                                           x_label=r'Q $({A^{\circ}}^{-1})$')
+        # save the noisy xrd
         torch.save(target_noisy_xrd.squeeze().cpu(), os.path.join(gt_xrd_folder, f'material{j}.pt'))
+        # save sinc only xrd
+        torch.save(target_sincOnly.squeeze().cpu(), os.path.join(gt_xrd_folder, f'sincOnly{j}.pt'))
         # apply smoothing to the XRD patterns
         noiseless_generated_xrds = np.array([data_loader.dataset.sample(an_xrd) for an_xrd in opt_generated_xrds.tolist()])
         opt_generated_xrds, opt_sinc_only_xrds = smooth_xrds(opt_generated_xrds=opt_generated_xrds, data_loader=data_loader)
