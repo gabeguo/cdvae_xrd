@@ -611,10 +611,10 @@ class CDVAE(BaseModule):
                 self.hparams.cost_coord * coord_loss +
                 self.hparams.cost_type * type_loss)
 
-            # evaluate num_atom prediction.
-            pred_num_atoms = outputs['pred_num_atoms'].argmax(dim=-1)
-            num_atom_accuracy = (
-                pred_num_atoms == batch.num_atoms).sum() / batch.num_graphs
+            # # evaluate num_atom prediction.
+            # pred_num_atoms = outputs['pred_num_atoms'].argmax(dim=-1)
+            # num_atom_accuracy = (
+            #     pred_num_atoms == batch.num_atoms).sum() / batch.num_graphs
 
             # evalute lattice prediction.
             pred_lengths_and_angles = outputs['pred_lengths_and_angles']
@@ -634,22 +634,22 @@ class CDVAE(BaseModule):
                 batch.lengths, batch.angles)
             volumes_mard = mard(true_volumes, pred_volumes)
 
-            # evaluate atom type prediction.
-            pred_atom_types = outputs['pred_atom_types']
-            target_atom_types = outputs['target_atom_types']
-            type_accuracy = pred_atom_types.argmax(
-                dim=-1) == (target_atom_types - 1)
-            type_accuracy = scatter(type_accuracy.float(
-            ), batch.batch, dim=0, reduce='mean').mean()
+            # # evaluate atom type prediction.
+            # pred_atom_types = outputs['pred_atom_types']
+            # target_atom_types = outputs['target_atom_types']
+            # type_accuracy = pred_atom_types.argmax(
+            #     dim=-1) == (target_atom_types - 1)
+            # type_accuracy = scatter(type_accuracy.float(
+            # ), batch.batch, dim=0, reduce='mean').mean()
 
             log_dict.update({
                 f'{prefix}_loss': loss,
                 f'{prefix}_property_loss': property_loss,
-                f'{prefix}_natom_accuracy': num_atom_accuracy,
+                #f'{prefix}_natom_accuracy': num_atom_accuracy,
                 f'{prefix}_lengths_mard': lengths_mard,
                 f'{prefix}_angles_mae': angles_mae,
                 f'{prefix}_volumes_mard': volumes_mard,
-                f'{prefix}_type_accuracy': type_accuracy,
+                #f'{prefix}_type_accuracy': type_accuracy,
             })
 
         return log_dict, loss
