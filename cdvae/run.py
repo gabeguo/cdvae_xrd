@@ -102,11 +102,9 @@ def run(cfg: DictConfig) -> None:
     )
 
     # Pass scaler from datamodule to model
-    hydra.utils.log.info(f"Passing scaler from datamodule to model <{datamodule.scaler}>")
+    # hydra.utils.log.info(f"Passing scaler from datamodule to model <{datamodule.scaler}>")
     model.lattice_scaler = datamodule.lattice_scaler.copy()
-    model.scaler = datamodule.scaler.copy()
     torch.save(datamodule.lattice_scaler, hydra_dir / 'lattice_scaler.pt')
-    torch.save(datamodule.scaler, hydra_dir / 'prop_scaler.pt')
     # Instantiate the callbacks
     callbacks: List[Callback] = build_callbacks(cfg=cfg)
 

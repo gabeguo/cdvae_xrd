@@ -23,6 +23,7 @@ from eval_utils import (
 CrystalNNFP = CrystalNNFingerprint.from_preset("ops")
 CompFP = ElementProperty.from_preset('magpie')
 
+# TODO: this is not applicable; remove and fix references
 Percentiles = {
     'mp20': np.array([-3.17562208, -2.82196882, -2.52814761]),
     'carbon': np.array([-154.527093, -154.45865733, -154.44206825]),
@@ -152,8 +153,9 @@ class GenEval(object):
                 len(valid_crys), n_samples, replace=False)
             self.valid_samples = [valid_crys[i] for i in sampled_indices]
         else:
-            raise Exception(
-                f'not enough valid crystals in the predicted set: {len(valid_crys)}/{n_samples}')
+            self.valid_samples = valid_crys
+            # raise Exception(
+            #     f'not enough valid crystals in the predicted set: {len(valid_crys)}/{n_samples}')
 
     def get_validity(self):
         comp_valid = np.array([c.comp_valid for c in self.crys]).mean()
@@ -197,6 +199,7 @@ class GenEval(object):
             return {'wdist_prop': None}
 
     def get_coverage(self):
+        raise RuntimeError('should not be called')
         cutoff_dict = COV_Cutoffs[self.eval_model_name]
         (cov_metrics_dict, combined_dist_dict) = compute_cov(
             self.crys, self.gt_crys,
@@ -322,6 +325,7 @@ def main(args):
         all_metrics.update(gen_metrics)
 
     if 'opt' in args.tasks:
+        # TODO: redo evaluation metrics for XRD
         opt_file_path = get_file_paths(args.root_path, 'opt', args.label)
         crys_array_list, _ = get_crystal_array_list(opt_file_path)
         opt_crys = p_map(lambda x: Crystal(x), crys_array_list)

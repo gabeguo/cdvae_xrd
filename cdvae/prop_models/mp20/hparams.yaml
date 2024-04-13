@@ -5,6 +5,8 @@ data:
   niggli: true
   primitive: false
   graph_method: crystalnn
+  xrd_filter: both
+  nanomaterial_size_angstrom: 100
   lattice_scale_method: scale_length
   preprocess_workers: 30
   readout: mean
@@ -25,6 +27,8 @@ data:
         niggli: ${data.niggli}
         primitive: ${data.primitive}
         graph_method: ${data.graph_method}
+        xrd_filter: ${data.xrd_filter}
+        nanomaterial_size_angstrom: ${data.nanomaterial_size_angstrom}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
       val:
@@ -35,6 +39,8 @@ data:
         niggli: ${data.niggli}
         primitive: ${data.primitive}
         graph_method: ${data.graph_method}
+        xrd_filter: ${data.xrd_filter}
+        nanomaterial_size_angstrom: ${data.nanomaterial_size_angstrom}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
       test:
@@ -45,6 +51,8 @@ data:
         niggli: ${data.niggli}
         primitive: ${data.primitive}
         graph_method: ${data.graph_method}
+        xrd_filter: ${data.xrd_filter}
+        nanomaterial_size_angstrom: ${data.nanomaterial_size_angstrom}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
     num_workers:
@@ -60,7 +68,7 @@ logging:
   progress_bar_refresh_rate: 20
   wandb:
     name: ${expname}
-    project: crystal_generation_mit
+    project: crystal_generation_xrd
     entity: null
     log_model: true
     mode: online

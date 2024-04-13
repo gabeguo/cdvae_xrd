@@ -11,7 +11,7 @@ data:
   max_atoms: 20
   otf_graph: false
   eval_model_name: perovskite
-  train_max_epochs: 3000
+  train_max_epochs: 100
   early_stopping_patience: 100000
   teacher_forcing_max_epoch: 1500
   datamodule:
@@ -60,7 +60,7 @@ logging:
   progress_bar_refresh_rate: 20
   wandb:
     name: ${expname}
-    project: crystal_generation_mit
+    project: crystal_generation_xrd
     entity: null
     log_model: true
     mode: online

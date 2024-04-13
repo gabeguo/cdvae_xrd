@@ -16,7 +16,12 @@ from cdvae.common.data_utils import (
     frac_to_cart_coords, min_distance_sqr_pbc)
 from cdvae.pl_modules.embeddings import MAX_ATOMIC_NUM
 from cdvae.pl_modules.embeddings import KHOT_EMBEDDINGS
+from cdvae.pl_modules.xrd import XRDConvRegressor, XRDDenseRegressor
 
+xrd_arch = {
+    'conv': XRDConvRegressor,
+    'dense': XRDDenseRegressor,
+}
 
 def build_mlp(in_dim, hidden_dim, fc_num_layers, out_dim):
     mods = [nn.Linear(in_dim, hidden_dim), nn.ReLU()]
@@ -42,6 +47,7 @@ class BaseModule(pl.LightningModule):
             self.hparams.optim.lr_scheduler, optimizer=opt
         )
         return {"optimizer": opt, "lr_scheduler": scheduler, "monitor": "train_loss"}
+        # TODO: monitor val_loss, strict=False
 
 
 class CrystGNN_Supervise(BaseModule):
@@ -98,9 +104,8 @@ class CrystGNN_Supervise(BaseModule):
 
     def compute_stats(self, batch, preds, prefix):
         loss = F.mse_loss(preds, batch.y)
-        self.scaler.match_device(preds)
-        scaled_preds = self.scaler.inverse_transform(preds)
-        scaled_y = self.scaler.inverse_transform(batch.y)
+        scaled_preds = preds
+        scaled_y = batch.y
         mae = torch.mean(torch.abs(scaled_preds - scaled_y))
 
         log_dict = {
@@ -153,8 +158,13 @@ class CDVAE(BaseModule):
         self.fc_composition = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
                                         self.hparams.fc_num_layers, MAX_ATOMIC_NUM)
         # for property prediction.
+        assert self.hparams.data.prop == 'xrd'
         if self.hparams.predict_property:
-            self.fc_property = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
+            if self.hparams.data.prop == 'xrd':
+                self.fc_property = xrd_arch[self.hparams.prop_arch]()
+            else:
+                raise ValueError('should be XRD')
+                self.fc_property = build_mlp(self.hparams.latent_dim, self.hparams.hidden_dim,
                                          self.hparams.fc_num_layers, 1)
 
         sigmas = torch.tensor(np.exp(np.linspace(
@@ -177,7 +187,6 @@ class CDVAE(BaseModule):
 
         # obtain from datamodule.
         self.lattice_scaler = None
-        self.scaler = None
 
     def reparameterize(self, mu, logvar):
         """
@@ -444,8 +453,7 @@ class CDVAE(BaseModule):
         return self.fc_num_atoms(z)
 
     def predict_property(self, z):
-        self.scaler.match_device(z)
-        return self.scaler.inverse_transform(self.fc_property(z))
+        return self.fc_property(z)
 
     def predict_lattice(self, z, num_atoms):
         self.lattice_scaler.match_device(z)
@@ -468,7 +476,10 @@ class CDVAE(BaseModule):
         return F.cross_entropy(pred_num_atoms, batch.num_atoms)
 
     def property_loss(self, z, batch):
-        return F.mse_loss(self.fc_property(z), batch.y)
+        pred = self.fc_property(z)
+        y = batch.y.reshape(pred.shape[0], -1)
+        assert pred.shape == y.shape
+        return F.l1_loss(pred, y)
 
     def lattice_loss(self, pred_lengths_and_angles, batch):
         self.lattice_scaler.match_device(pred_lengths_and_angles)

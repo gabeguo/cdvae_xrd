@@ -1,18 +1,24 @@
 import time
 import argparse
 import torch
+import os
 
 from tqdm import tqdm
 from torch.optim import Adam
+import torch.nn.functional as F
 from pathlib import Path
 from types import SimpleNamespace
 from torch_geometric.data import Batch
+from torch_geometric.data import DataLoader
+
 
 from eval_utils import load_model
-
+from cdvae.pl_modules.xrd import XRDEncoder
+from cdvae.pl_data.dataset import CrystXRDDataset
+from cdvae.common.data_utils import get_scaler_from_data_list
 
 def reconstructon(loader, model, ld_kwargs, num_evals,
-                  force_num_atoms=False, force_atom_types=False, down_sample_traj_step=1):
+                  force_num_atoms=False, force_atom_types=False, down_sample_traj_step=1, xrd=False, model_path=None):
     """
     reconstruct the crystals in <loader>.
     """
@@ -25,7 +31,14 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
     angles = []
     input_data_list = []
 
+    if xrd:
+        xrd_encoder = XRDEncoder().to('cuda' if torch.cuda.is_available() else 'cpu')
+        xrd_encoder.load_state_dict(torch.load(os.path.join(model_path, 'xrd_enc.pt')))
+        all_noised_xrds = list()
+    
     for idx, batch in enumerate(loader):
+        if xrd:
+            batch, xrd_data = batch 
         if torch.cuda.is_available():
             batch.cuda()
         print(f'batch {idx} in {len(loader)}')
@@ -35,7 +48,12 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
         batch_lengths, batch_angles = [], []
 
         # only sample one z, multiple evals for stoichaticity in langevin dynamics
-        _, _, z = model.encode(batch)
+        if xrd:
+            z = xrd_encoder(xrd_data.cuda().unsqueeze(1))
+            assert xrd_data.shape[1] == 512
+            all_noised_xrds.append(xrd_data)
+        else:
+            _, _, z = model.encode(batch)
 
         for eval_idx in range(num_evals):
             gt_num_atoms = batch.num_atoms if force_num_atoms else None
@@ -78,9 +96,16 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
         all_atom_types_stack = torch.cat(all_atom_types_stack, dim=2)
     input_data_batch = Batch.from_data_list(input_data_list)
 
-    return (
+    ret_val = [
         frac_coords, num_atoms, atom_types, lengths, angles,
-        all_frac_coords_stack, all_atom_types_stack, input_data_batch)
+        all_frac_coords_stack, all_atom_types_stack, input_data_batch]
+    if xrd:
+        all_noised_xrds = torch.cat(all_noised_xrds, dim=0)
+        assert all_noised_xrds.shape == (len(loader.dataset), 512)
+        ret_val.append(all_noised_xrds)
+    else:
+        ret_val.append(None)
+    return ret_val
 
 
 def generation(model, ld_kwargs, num_batches_to_sample, num_samples_per_z,
@@ -142,34 +167,34 @@ def generation(model, ld_kwargs, num_batches_to_sample, num_samples_per_z,
 
 
 def optimization(model, ld_kwargs, data_loader,
-                 num_starting_points=100, num_gradient_steps=5000,
-                 lr=1e-3, num_saved_crys=10):
-    if data_loader is not None:
-        batch = next(iter(data_loader)).to(model.device)
-        _, _, z = model.encode(batch)
-        z = z[:num_starting_points].detach().clone()
-        z.requires_grad = True
-    else:
-        z = torch.randn(num_starting_points, model.hparams.hidden_dim,
-                        device=model.device)
-        z.requires_grad = True
+                 num_starting_points=100, num_gradient_steps=20000,
+                 lr=1e-2):
+    assert data_loader is not None
+
+    batch = next(iter(data_loader)).to(model.device)
+    # Initialize random latent codes! (Nonsensical to encode, then decode)
+    z = torch.randn(num_starting_points, model.hparams.hidden_dim,
+                    device=model.device)
+    z.requires_grad = True
+    noisy_xrds = batch.y.reshape(-1, 512)[:num_starting_points]
 
     opt = Adam([z], lr=lr)
     model.freeze()
 
     all_crystals = []
-    interval = num_gradient_steps // (num_saved_crys-1)
-    for i in tqdm(range(num_gradient_steps)):
+    for i in range(num_gradient_steps):
         opt.zero_grad()
-        loss = model.fc_property(z).mean()
+        loss = F.mse_loss(model.fc_property(z), noisy_xrds)
+        print(f'predicted property loss: {loss.item()}')
         loss.backward()
         opt.step()
-
-        if i % interval == 0 or i == (num_gradient_steps-1):
+        if i == (num_gradient_steps-1):
             crystals = model.langevin_dynamics(z, ld_kwargs)
             all_crystals.append(crystals)
-    return {k: torch.cat([d[k] for d in all_crystals]).unsqueeze(0) for k in
+    dict = {k: torch.cat([d[k] for d in all_crystals]).unsqueeze(0) for k in
             ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
+    dict['xrds'] = noisy_xrds
+    return dict, batch
 
 
 def main(args):
@@ -183,7 +208,28 @@ def main(args):
                                 min_sigma=args.min_sigma,
                                 save_traj=args.save_traj,
                                 disable_bar=args.disable_bar)
-
+    # overwrite
+    if args.xrd: # TODO: remove
+        dataset_to_prop = {
+            'perov_5': 'heat_ref',
+            'mp_20': 'formation_energy_per_atom',
+            'carbon_24': 'energy_per_atom'
+        }
+        # test loader
+        test_dataset = CrystXRDDataset(
+            args.data_dir,
+            filename='test.csv',
+            prop=dataset_to_prop[args.model_path.split('/')[-1]]
+        )
+        test_dataset.lattice_scaler = torch.load(
+            Path(model_path) / 'lattice_scaler.pt')
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=2,
+        ) 
+    
     if torch.cuda.is_available():
         model.to('cuda')
 
@@ -191,9 +237,9 @@ def main(args):
         print('Evaluate model on the reconstruction task.')
         start_time = time.time()
         (frac_coords, num_atoms, atom_types, lengths, angles,
-         all_frac_coords_stack, all_atom_types_stack, input_data_batch) = reconstructon(
+         all_frac_coords_stack, all_atom_types_stack, input_data_batch, noised_xrds) = reconstructon(
             test_loader, model, ld_kwargs, args.num_evals,
-            args.force_num_atoms, args.force_atom_types, args.down_sample_traj_step)
+            args.force_num_atoms, args.force_atom_types, args.down_sample_traj_step, args.xrd, args.model_path)
 
         if args.label == '':
             recon_out_name = 'eval_recon.pt'
@@ -210,7 +256,8 @@ def main(args):
             'angles': angles,
             'all_frac_coords_stack': all_frac_coords_stack,
             'all_atom_types_stack': all_atom_types_stack,
-            'time': time.time() - start_time
+            'time': time.time() - start_time,
+            'xrds': noised_xrds
         }, model_path / recon_out_name)
 
     if 'gen' in args.tasks:
@@ -246,8 +293,9 @@ def main(args):
             loader = test_loader
         else:
             loader = None
-        optimized_crystals = optimization(model, ld_kwargs, loader)
-        optimized_crystals.update({'eval_setting': args,
+        optimized_crystals, data = optimization(model, ld_kwargs, loader)
+        optimized_crystals.update({'data': data,
+                                   'eval_setting': args,
                                    'time': time.time() - start_time})
 
         if args.label == '':
@@ -260,6 +308,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', required=True)
+    parser.add_argument('--xrd', action='store_true') # TODO: deprecate option
+    parser.add_argument('--data_dir', default='data', type=str)
     parser.add_argument('--tasks', nargs='+', default=['recon', 'gen', 'opt'])
     parser.add_argument('--n_step_each', default=100, type=int)
     parser.add_argument('--step_lr', default=1e-4, type=float)
@@ -277,4 +327,5 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    print('starting eval', args)
     main(args)

@@ -1,0 +1,15 @@
+python -W ignore conditional_generation.py \
+    --model_path /home/gabeguo/hydra/singlerun/2024-04-07/mp_20_sincSmooth100_EXPERIMENTAL_TEST \
+    --num_starting_points 200 \
+    --num_candidates 5 \
+    --lr 0.1 \
+    --min_lr 1e-4 \
+    --l2_penalty 2e-4 \
+    --num_tested_materials 50 \
+    --label experimental_sinc100Filter_ \
+    --num_gradient_steps 5000 \
+    --num_atom_lambda 0.1 \
+    --n_step_each 100 \
+    --composition_lambda 0.1 \
+    --l1_loss \
+    --output_dir paper_results

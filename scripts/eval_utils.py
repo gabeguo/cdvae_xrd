@@ -52,9 +52,11 @@ def load_config(model_path):
     return cfg
 
 
-def load_model(model_path, load_data=False, testing=True):
+def load_model(model_path, load_data=False, testing=True, batch_size=None):
     with initialize_config_dir(str(model_path)):
         cfg = compose(config_name='hparams')
+        if batch_size is not None:
+            cfg.data.datamodule.batch_size.test = batch_size
         model = hydra.utils.instantiate(
             cfg.model,
             optim=cfg.optim,
@@ -69,7 +71,7 @@ def load_model(model_path, load_data=False, testing=True):
             ckpt = str(ckpts[ckpt_epochs.argsort()[-1]])
         model = type(model).load_from_checkpoint(ckpt)
         model.lattice_scaler = torch.load(model_path / 'lattice_scaler.pt')
-        model.scaler = torch.load(model_path / 'prop_scaler.pt')
+        #model.scaler = torch.load(model_path / 'prop_scaler.pt')
 
         if load_data:
             datamodule = hydra.utils.instantiate(
@@ -192,7 +194,7 @@ def prop_model_eval(eval_model_name, crystal_array_list):
         cfg.data.graph_method, cfg.data.preprocess_workers,
         cfg.data.lattice_scale_method)
 
-    dataset.scaler = model.scaler.copy()
+    #dataset.scaler = model.scaler.copy()
 
     loader = DataLoader(
         dataset,
@@ -208,8 +210,9 @@ def prop_model_eval(eval_model_name, crystal_array_list):
 
     for batch in loader:
         preds = model(batch.cuda())
-        model.scaler.match_device(preds)
-        scaled_preds = model.scaler.inverse_transform(preds)
+        #model.scaler.match_device(preds)
+        #scaled_preds = model.scaler.inverse_transform(preds)
+        scaled_preds = preds
         all_preds.append(scaled_preds.detach().cpu().numpy())
 
     all_preds = np.concatenate(all_preds, axis=0).squeeze(1)
