@@ -16,7 +16,7 @@ from cdvae.common.data_utils import (
     frac_to_cart_coords, min_distance_sqr_pbc)
 from cdvae.pl_modules.embeddings import MAX_ATOMIC_NUM
 from cdvae.pl_modules.embeddings import KHOT_EMBEDDINGS
-from cdvae.pl_modules.xrd import XRDConvRegressor, XRDDenseRegressor
+from cdvae.pl_modules.xrd import XRDConvRegressor, XRDDenseRegressor, DiffractionPatternEmbedder
 
 xrd_arch = {
     'conv': XRDConvRegressor,
@@ -50,100 +50,103 @@ class BaseModule(pl.LightningModule):
         # TODO: monitor val_loss, strict=False
 
 
-class CrystGNN_Supervise(BaseModule):
-    """
-    GNN model for fitting the supervised objectives for crystals.
-    """
+# class CrystGNN_Supervise(BaseModule):
+#     """
+#     GNN model for fitting the supervised objectives for crystals.
+#     """
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+#     def __init__(self, *args, **kwargs) -> None:
+#         super().__init__(*args, **kwargs)
 
-        self.encoder = hydra.utils.instantiate(self.hparams.encoder)
+#         self.encoder = hydra.utils.instantiate(self.hparams.encoder)
 
-    def forward(self, batch) -> Dict[str, torch.Tensor]:
-        preds = self.encoder(batch)  # shape (N, 1)
-        return preds
+#     def forward(self, batch) -> Dict[str, torch.Tensor]:
+#         preds = self.encoder(batch)  # shape (N, 1)
+#         return preds
 
-    def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
+#     def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
 
-        preds = self(batch)
+#         preds = self(batch)
 
-        loss = F.mse_loss(preds, batch.y)
-        self.log_dict(
-            {'train_loss': loss},
-            on_step=True,
-            on_epoch=True,
-            prog_bar=True,
-        )
-        return loss
+#         loss = F.mse_loss(preds, batch.y)
+#         self.log_dict(
+#             {'train_loss': loss},
+#             on_step=True,
+#             on_epoch=True,
+#             prog_bar=True,
+#         )
+#         return loss
 
-    def validation_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
+#     def validation_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
 
-        preds = self(batch)
+#         preds = self(batch)
 
-        log_dict, loss = self.compute_stats(batch, preds, prefix='val')
+#         log_dict, loss = self.compute_stats(batch, preds, prefix='val')
 
-        self.log_dict(
-            log_dict,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-        )
-        return loss
+#         self.log_dict(
+#             log_dict,
+#             on_step=False,
+#             on_epoch=True,
+#             prog_bar=True,
+#         )
+#         return loss
 
-    def test_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
+#     def test_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
 
-        preds = self(batch)
+#         preds = self(batch)
 
-        log_dict, loss = self.compute_stats(batch, preds, prefix='test')
+#         log_dict, loss = self.compute_stats(batch, preds, prefix='test')
 
-        self.log_dict(
-            log_dict,
-        )
-        return loss
+#         self.log_dict(
+#             log_dict,
+#         )
+#         return loss
 
-    def compute_stats(self, batch, preds, prefix):
-        loss = F.mse_loss(preds, batch.y)
-        scaled_preds = preds
-        scaled_y = batch.y
-        mae = torch.mean(torch.abs(scaled_preds - scaled_y))
+#     def compute_stats(self, batch, preds, prefix):
+#         loss = F.mse_loss(preds, batch.y)
+#         scaled_preds = preds
+#         scaled_y = batch.y
+#         mae = torch.mean(torch.abs(scaled_preds - scaled_y))
 
-        log_dict = {
-            f'{prefix}_loss': loss,
-            f'{prefix}_mae': mae,
-        }
+#         log_dict = {
+#             f'{prefix}_loss': loss,
+#             f'{prefix}_mae': mae,
+#         }
 
-        if self.hparams.data.prop == 'scaled_lattice':
-            pred_lengths = scaled_preds[:, :3]
-            pred_angles = scaled_preds[:, 3:]
-            if self.hparams.data.lattice_scale_method == 'scale_length':
-                pred_lengths = pred_lengths * \
-                    batch.num_atoms.view(-1, 1).float()**(1/3)
-            lengths_mae = torch.mean(torch.abs(pred_lengths - batch.lengths))
-            angles_mae = torch.mean(torch.abs(pred_angles - batch.angles))
-            lengths_mard = mard(batch.lengths, pred_lengths)
-            angles_mard = mard(batch.angles, pred_angles)
+#         if self.hparams.data.prop == 'scaled_lattice':
+#             pred_lengths = scaled_preds[:, :3]
+#             pred_angles = scaled_preds[:, 3:]
+#             if self.hparams.data.lattice_scale_method == 'scale_length':
+#                 pred_lengths = pred_lengths * \
+#                     batch.num_atoms.view(-1, 1).float()**(1/3)
+#             lengths_mae = torch.mean(torch.abs(pred_lengths - batch.lengths))
+#             angles_mae = torch.mean(torch.abs(pred_angles - batch.angles))
+#             lengths_mard = mard(batch.lengths, pred_lengths)
+#             angles_mard = mard(batch.angles, pred_angles)
 
-            pred_volumes = lengths_angles_to_volume(pred_lengths, pred_angles)
-            true_volumes = lengths_angles_to_volume(
-                batch.lengths, batch.angles)
-            volumes_mard = mard(true_volumes, pred_volumes)
-            log_dict.update({
-                f'{prefix}_lengths_mae': lengths_mae,
-                f'{prefix}_angles_mae': angles_mae,
-                f'{prefix}_lengths_mard': lengths_mard,
-                f'{prefix}_angles_mard': angles_mard,
-                f'{prefix}_volumes_mard': volumes_mard,
-            })
-        return log_dict, loss
+#             pred_volumes = lengths_angles_to_volume(pred_lengths, pred_angles)
+#             true_volumes = lengths_angles_to_volume(
+#                 batch.lengths, batch.angles)
+#             volumes_mard = mard(true_volumes, pred_volumes)
+#             log_dict.update({
+#                 f'{prefix}_lengths_mae': lengths_mae,
+#                 f'{prefix}_angles_mae': angles_mae,
+#                 f'{prefix}_lengths_mard': lengths_mard,
+#                 f'{prefix}_angles_mard': angles_mard,
+#                 f'{prefix}_volumes_mard': volumes_mard,
+#             })
+#         return log_dict, loss
 
 
 class CDVAE(BaseModule):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        self.encoder = hydra.utils.instantiate(
-            self.hparams.encoder, num_targets=self.hparams.latent_dim)
+        # self.encoder = hydra.utils.instantiate(
+        #     self.hparams.encoder, num_targets=self.hparams.latent_dim)
+        self.encoder = DiffractionPatternEmbedder(xrd_dims=512, 
+                                                  latent_dims=self.hparams.latent_dim, 
+                                                  num_blocks=4)
         self.decoder = hydra.utils.instantiate(self.hparams.decoder)
 
         self.fc_mu = nn.Linear(self.hparams.latent_dim,
@@ -160,6 +163,7 @@ class CDVAE(BaseModule):
         # for property prediction.
         assert self.hparams.data.prop == 'xrd'
         if self.hparams.predict_property:
+            raise ValueError('do not do property prediction! condition on the xrd directly!')
             if self.hparams.data.prop == 'xrd':
                 self.fc_property = xrd_arch[self.hparams.prop_arch]()
             else:

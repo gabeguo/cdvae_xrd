@@ -2,9 +2,116 @@ import torch
 from torch import nn
 import numpy as np
 
+class DiffractionPatternEmbedder(nn.Module):
+    def __init__(self, xrd_dims=512, latent_dims=256, num_blocks=4):
+        super(DiffractionPatternEmbedder, self).__init__()
+
+        self.num_blocks = num_blocks
+        self.xrd_dims = xrd_dims
+        self.latent_dims = latent_dims
+
+        self.first_conv = nn.Sequential(
+            nn.Conv1d(in_channels=1, out_channels=8, kernel_size=3, padding=1, bias=False),
+            nn.LayerNorm([8, self.xrd_dims]),
+            nn.ReLU()
+        )
+
+        self.conv_blocks_1 = nn.ModuleList(
+            [nn.Sequential(
+                nn.Conv1d(in_channels=8*(i+1), out_channels=8, kernel_size=3, padding=1, bias=False),
+                nn.LayerNorm([8, self.xrd_dims]),
+                nn.ReLU()
+            ) 
+            for i in range(self.num_blocks)]
+        )
+
+        self.transition = nn.Sequential(
+            nn.Conv1d(in_channels=8*(self.num_blocks+1), out_channels=8*2, kernel_size=1, bias=False),
+            nn.LayerNorm([8*2, self.xrd_dims]),
+            nn.ReLU(),
+            nn.AvgPool1d(kernel_size=2, stride=2, padding=0) # decrease dimensionality to self.xrd_dims // 2
+        )
+
+        self.conv_blocks_2 = nn.ModuleList(
+            [nn.Sequential(
+                nn.Conv1d(in_channels=8*(i+2), out_channels=8, kernel_size=3, padding=1, bias=False),
+                nn.LayerNorm([8, self.xrd_dims // 2]),
+                nn.ReLU()
+            ) 
+            for i in range(self.num_blocks)]
+        )
+
+        self.lastfc = nn.Sequential(
+            nn.Conv1d(in_channels=8*(self.num_blocks+2), out_channels=1, kernel_size=1, padding=0),
+            nn.Flatten(start_dim=1),
+            nn.Linear(self.xrd_dims // 2, self.latent_dims),
+            nn.BatchNorm1d(num_features=self.latent_dims)
+        )
+
+        print('classifier free guidance with XRD embedding')
+
+        return
+
+    """
+    Input is (n_channels, 512)-dimensional
+    Output is 256-dimensional
+    """
+    def forward(self, batch):
+        assert len(batch.num_atoms.shape) == 1
+        batch_size = batch.num_atoms.shape[0]
+        x = batch.y.reshape(batch_size, 1, self.xrd_dims) # make it channels (N, C, L)
+
+        assert self.xrd_dims == 512
+        assert self.latent_dims == 256
+
+        # first convolution: give it some channels
+        x = self.first_conv(x)
+        assert len(x.shape) == 3
+        assert x.shape[0] == batch_size
+        assert x.shape[1] == 8
+        assert x.shape[2] == self.xrd_dims
+
+        # first group of densely connected conv blocks - size: (batch_size x num_channels x 1024)
+        x_history_1 = [x]
+        for i, the_block in enumerate(self.conv_blocks_1):
+            assert len(x_history_1) == i + 1 # make sure we are updating the history list
+            x = the_block(torch.cat(x_history_1, dim=1))
+            x_history_1.append(x) # add new result to running list
+            assert len(x.shape) == 3
+            assert x.shape[1] == 8
+            assert x.shape[2] == self.xrd_dims
+        assert len(x_history_1) == len(self.conv_blocks_1) + 1 # make sure we hit all the blocks
+ 
+        # transition layer: downsize combo of all previous feature maps to (batch_size, (2 * num_channels), 512)
+        x = self.transition(torch.cat(x_history_1, dim=1))
+        assert len(x.shape) == 3
+        assert x.shape[1] == 8 * 2
+        assert x.shape[2] == self.xrd_dims // 2
+
+        # second group of densely connected conv blocks
+        x_history_2 = [x] # start with downsized
+        for i, the_block in enumerate(self.conv_blocks_2):
+            assert len(x_history_2) == i + 1 # make sure we are updating the history list
+            x = the_block(torch.cat(x_history_2, dim=1))
+            x_history_2.append(x) # add new result to running list
+            assert len(x.shape) == 3
+            assert x.shape[1] == 8
+            assert x.shape[2] == self.xrd_dims // 2
+        assert len(x_history_2) == len(self.conv_blocks_2) + 1 # make sure we hit all the blocks
+
+        # get final output
+        x_final = self.lastfc(torch.cat(x_history_2, dim=1))
+
+        assert len(x_final.shape) == 2
+        assert x_final.shape[0] == batch_size
+        assert x_final.shape[1] == self.latent_dims
+        return x_final
+
+
 class XRDDenseRegressor(nn.Module):
     def __init__(self, latent_dim=256, xrd_dim=512, num_blocks=4):
         super(XRDDenseRegressor, self).__init__()
+        raise ValueError('do not use this one: we should directly condition on XRD')
 
         self.num_blocks = num_blocks
 
