@@ -146,7 +146,7 @@ class CDVAE(BaseModule):
         #     self.hparams.encoder, num_targets=self.hparams.latent_dim)
         self.encoder = DiffractionPatternEmbedder(xrd_dims=512, 
                                                   latent_dims=self.hparams.latent_dim, 
-                                                  num_blocks=4)
+                                                  num_blocks=3)
         self.decoder = hydra.utils.instantiate(self.hparams.decoder)
 
         self.fc_mu = nn.Linear(self.hparams.latent_dim,

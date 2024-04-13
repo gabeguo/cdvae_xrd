@@ -3,7 +3,7 @@ from torch import nn
 import numpy as np
 
 class DiffractionPatternEmbedder(nn.Module):
-    def __init__(self, xrd_dims=512, latent_dims=256, num_blocks=4):
+    def __init__(self, xrd_dims=512, latent_dims=256, num_blocks=3):
         super(DiffractionPatternEmbedder, self).__init__()
 
         self.num_blocks = num_blocks
