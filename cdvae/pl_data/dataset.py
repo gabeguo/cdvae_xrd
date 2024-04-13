@@ -108,7 +108,7 @@ class CrystDataset(Dataset):
             assert augmented_xrd.shape == (512, 1)
 
             plain_xrd = self.sample(raw_xrd.numpy())
-            plain_xrd = plain_xrd.view(dim, -1)
+            plain_xrd = torch.tensor(plain_xrd).view(dim, -1)
             assert plain_xrd.shape == (512, 1)
         else:
             raise ValueError('should have xrd')
@@ -131,8 +131,8 @@ class CrystDataset(Dataset):
             pretty_formula=data_dict['pretty_formula'],
             mpid=data_dict['mp_id'],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=augmented_xrd,
-            raw_xrd=torch.tensor(plain_xrd),
+            y=augmented_xrd.to(dtype=torch.float32),
+            raw_xrd=plain_xrd.to(dtype=torch.float32),
             nanomaterial_size=curr_nanomaterial_size
         )
         return data

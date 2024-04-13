@@ -59,6 +59,7 @@ class DiffractionPatternEmbedder(nn.Module):
     def forward(self, batch):
         assert len(batch.num_atoms.shape) == 1
         batch_size = batch.num_atoms.shape[0]
+        assert batch.y.shape == (batch_size * self.xrd_dims, 1)
         x = batch.y.reshape(batch_size, 1, self.xrd_dims) # make it channels (N, C, L)
 
         assert self.xrd_dims == 512
