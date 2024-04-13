@@ -362,7 +362,7 @@ class CDVAE(BaseModule):
             cart_coords, pred_lengths, pred_angles, batch.num_atoms)
 
         pred_cart_coord_diff, pred_atom_types = self.decoder(
-            z, noisy_frac_coords, rand_atom_types, batch.num_atoms, pred_lengths, pred_angles)
+            z, noisy_frac_coords, batch.atom_types, batch.num_atoms, pred_lengths, pred_angles)
 
         # compute loss.
         num_atom_loss = self.num_atom_loss(pred_num_atoms, batch)
