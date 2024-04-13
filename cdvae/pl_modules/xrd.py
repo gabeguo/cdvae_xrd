@@ -3,46 +3,50 @@ from torch import nn
 import numpy as np
 
 class DiffractionPatternEmbedder(nn.Module):
-    def __init__(self, xrd_dims=512, latent_dims=256, num_blocks=3):
+    def __init__(self, xrd_dims=512, latent_dims=256, num_blocks=3, num_channels=6):
         super(DiffractionPatternEmbedder, self).__init__()
 
         self.num_blocks = num_blocks
         self.xrd_dims = xrd_dims
         self.latent_dims = latent_dims
+        self.num_channels = num_channels
 
         self.first_conv = nn.Sequential(
-            nn.Conv1d(in_channels=1, out_channels=8, kernel_size=3, padding=1, bias=False),
-            nn.LayerNorm([8, self.xrd_dims]),
+            nn.Conv1d(in_channels=1, out_channels=self.num_channels, kernel_size=3, padding=1, bias=False),
+            nn.LayerNorm([self.num_channels, self.xrd_dims]),
             nn.ReLU()
         )
 
         self.conv_blocks_1 = nn.ModuleList(
             [nn.Sequential(
-                nn.Conv1d(in_channels=8*(i+1), out_channels=8, kernel_size=3, padding=1, bias=False),
-                nn.LayerNorm([8, self.xrd_dims]),
+                nn.Conv1d(in_channels=self.num_channels*(i+1), out_channels=self.num_channels, 
+                          kernel_size=3, padding=1, bias=False),
+                nn.LayerNorm([self.num_channels, self.xrd_dims]),
                 nn.ReLU()
             ) 
             for i in range(self.num_blocks)]
         )
 
         self.transition = nn.Sequential(
-            nn.Conv1d(in_channels=8*(self.num_blocks+1), out_channels=8*2, kernel_size=1, bias=False),
-            nn.LayerNorm([8*2, self.xrd_dims]),
+            nn.Conv1d(in_channels=self.num_channels*(self.num_blocks+1), out_channels=self.num_channels*2, 
+                      kernel_size=1, bias=False),
+            nn.LayerNorm([self.num_channels*2, self.xrd_dims]),
             nn.ReLU(),
             nn.AvgPool1d(kernel_size=2, stride=2, padding=0) # decrease dimensionality to self.xrd_dims // 2
         )
 
         self.conv_blocks_2 = nn.ModuleList(
             [nn.Sequential(
-                nn.Conv1d(in_channels=8*(i+2), out_channels=8, kernel_size=3, padding=1, bias=False),
-                nn.LayerNorm([8, self.xrd_dims // 2]),
+                nn.Conv1d(in_channels=self.num_channels*(i+2), out_channels=self.num_channels, 
+                          kernel_size=3, padding=1, bias=False),
+                nn.LayerNorm([self.num_channels, self.xrd_dims // 2]),
                 nn.ReLU()
             ) 
             for i in range(self.num_blocks)]
         )
 
         self.lastfc = nn.Sequential(
-            nn.Conv1d(in_channels=8*(self.num_blocks+2), out_channels=1, kernel_size=1, padding=0),
+            nn.Conv1d(in_channels=self.num_channels*(self.num_blocks+2), out_channels=1, kernel_size=1, padding=0),
             nn.Flatten(start_dim=1),
             nn.Linear(self.xrd_dims // 2, self.latent_dims),
             nn.BatchNorm1d(num_features=self.latent_dims)
@@ -69,7 +73,7 @@ class DiffractionPatternEmbedder(nn.Module):
         x = self.first_conv(x)
         assert len(x.shape) == 3
         assert x.shape[0] == batch_size
-        assert x.shape[1] == 8
+        assert x.shape[1] == self.num_channels
         assert x.shape[2] == self.xrd_dims
 
         # first group of densely connected conv blocks - size: (batch_size x num_channels x 1024)
@@ -79,14 +83,14 @@ class DiffractionPatternEmbedder(nn.Module):
             x = the_block(torch.cat(x_history_1, dim=1))
             x_history_1.append(x) # add new result to running list
             assert len(x.shape) == 3
-            assert x.shape[1] == 8
+            assert x.shape[1] == self.num_channels
             assert x.shape[2] == self.xrd_dims
         assert len(x_history_1) == len(self.conv_blocks_1) + 1 # make sure we hit all the blocks
  
         # transition layer: downsize combo of all previous feature maps to (batch_size, (2 * num_channels), 512)
         x = self.transition(torch.cat(x_history_1, dim=1))
         assert len(x.shape) == 3
-        assert x.shape[1] == 8 * 2
+        assert x.shape[1] == self.num_channels * 2
         assert x.shape[2] == self.xrd_dims // 2
 
         # second group of densely connected conv blocks
@@ -96,7 +100,7 @@ class DiffractionPatternEmbedder(nn.Module):
             x = the_block(torch.cat(x_history_2, dim=1))
             x_history_2.append(x) # add new result to running list
             assert len(x.shape) == 3
-            assert x.shape[1] == 8
+            assert x.shape[1] == self.num_channels
             assert x.shape[2] == self.xrd_dims // 2
         assert len(x_history_2) == len(self.conv_blocks_2) + 1 # make sure we hit all the blocks
 
