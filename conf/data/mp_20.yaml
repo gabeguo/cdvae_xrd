@@ -41,7 +41,8 @@ datamodule:
       xrd_filter: ${data.xrd_filter}
       lattice_scale_method: ${data.lattice_scale_method}
       preprocess_workers: ${data.preprocess_workers}
-      nanomaterial_size_angstrom: ${data.nanomaterial_size_angstrom}
+      nanomaterial_size_min_angstrom: ${data.nanomaterial_size_min_angstrom}
+      nanomaterial_size_max_angstrom: ${data.nanomaterial_size_max_angstrom}
       n_presubsample: ${data.n_presubsample}
       n_postsubsample: ${data.n_postsubsample}
       wavesource: ${data.wavesource}
@@ -57,7 +58,8 @@ datamodule:
         xrd_filter: ${data.xrd_filter}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
-        nanomaterial_size_angstrom: ${data.nanomaterial_size_angstrom}
+        nanomaterial_size_min_angstrom: ${data.nanomaterial_size_min_angstrom}
+        nanomaterial_size_max_angstrom: ${data.nanomaterial_size_max_angstrom}
         n_presubsample: ${data.n_presubsample}
         n_postsubsample: ${data.n_postsubsample}
         wavesource: ${data.wavesource}
@@ -73,7 +75,8 @@ datamodule:
         xrd_filter: ${data.xrd_filter}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
-        nanomaterial_size_angstrom: ${data.nanomaterial_size_angstrom}
+        nanomaterial_size_min_angstrom: ${data.nanomaterial_size_min_angstrom}
+        nanomaterial_size_max_angstrom: ${data.nanomaterial_size_max_angstrom}
         n_presubsample: ${data.n_presubsample}
         n_postsubsample: ${data.n_postsubsample}
         wavesource: ${data.wavesource}
