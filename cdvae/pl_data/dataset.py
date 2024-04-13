@@ -23,13 +23,13 @@ class CrystDataset(Dataset):
                  prop: ValueNode, niggli: ValueNode, primitive: ValueNode,
                  graph_method: ValueNode, preprocess_workers: ValueNode,
                  lattice_scale_method: ValueNode, xrd_filter : ValueNode,
-                 nanomaterial_size_angstrom=50, # 10, 50, 100, 1000
+                 nanomaterial_size_min_angstrom=10,
+                 nanomaterial_size_max_angstrom=1000,
                  n_presubsample=4096, n_postsubsample=512,
                  min_2_theta = 0, 
                  max_2_theta = 180,
                  wavesource='CuKa',
-                 horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
-                 vertical_noise=1e-3,
+                 vertical_noise=1e-2,
                  **kwargs):
         super().__init__()
         self.path = path
@@ -41,14 +41,17 @@ class CrystDataset(Dataset):
         self.graph_method = graph_method
         self.lattice_scale_method = lattice_scale_method
         self.xrd_filter = xrd_filter
-        assert self.xrd_filter in ['gaussian', 'sinc', 'both'], "invalid filter requested"
+        assert self.xrd_filter in ['sinc'], "invalid filter requested"
+
+        assert self.prop == 'xrd'
 
         self.wavelength = WAVELENGTHS[wavesource]
-        self.nanomaterial_size = nanomaterial_size_angstrom
+        self.nanomaterial_size_min = nanomaterial_size_min_angstrom
+        self.nanomaterial_size_max = nanomaterial_size_max_angstrom
         self.n_presubsample = n_presubsample
         self.n_postsubsample = n_postsubsample
 
-        if self.xrd_filter == 'sinc' or self.xrd_filter == 'both':
+        if self.xrd_filter == 'sinc':
             # compute Q range
             min_theta = min_2_theta / 2
             max_theta = max_2_theta / 2
@@ -62,13 +65,10 @@ class CrystDataset(Dataset):
             self.Qs = np.linspace(Q_min, Q_max, self.n_presubsample)
             self.Qs_shifted = self.Qs - phase_shift            
             
-            self.sinc_filt = self.nanomaterial_size * np.sinc((np.pi * self.nanomaterial_size * self.Qs_shifted)/np.pi)
-            # sinc filter is symmetric, so we can just use the first half
         else:
-            raise ValueError("Gaussian filter is deprecated. Use sinc filter instead.")
+            raise ValueError("Other filters are deprecated. Use sinc filter instead.")
 
-        self.horizontal_noise_range=horizontal_noise_range
-        self.vertical_noise=vertical_noise
+        self.vertical_noise = vertical_noise
 
         self.cached_data = preprocess(
             self.path,
@@ -82,18 +82,6 @@ class CrystDataset(Dataset):
         self.lattice_scaler = None
         self.scaler = None
 
-        # smooth XRDs
-        for curr_data_dict in tqdm(self.cached_data):
-            curr_xrd = curr_data_dict[self.prop]
-            curr_xrd = curr_xrd.reshape((self.n_presubsample,))
-            curr_data_dict['rawXRD'] = self.sample(curr_xrd.numpy()) # need to downsample first
-            # have sinc with gaussian filter & sinc w/out gaussian filter
-            curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
-            curr_data_dict[self.prop] = curr_xrd
-            curr_data_dict['sincOnly'] = sinc_only_xrd
-            curr_data_dict['sincOnlyPresubsample'] = sinc_only_xrd_presubsample
-            curr_data_dict['xrdPresubsample'] = curr_xrd_presubsample
-
     def sample(self, x):
         step_size = int(np.ceil(len(x) / self.n_postsubsample))
         x_subsample = [np.max(x[i:i+step_size]) for i in range(0, len(x), step_size)]
@@ -104,27 +92,27 @@ class CrystDataset(Dataset):
 
     def __getitem__(self, index):
         data_dict = self.cached_data[index]
-        # scaler is set in DataModule set stage
-        prop = data_dict[self.prop]#self.scaler.transform(data_dict[self.prop])
+        assert self.prop == 'xrd'
+        raw_xrd = data_dict[self.prop]
         (frac_coords, atom_types, lengths, angles, edge_indices,
          to_jimages, num_atoms) = data_dict['graph_arrays']
         
+        assert raw_xrd.shape == (self.n_presubsample,)
+        augmented_xrd, curr_nanomaterial_size = self.augment_xrdStrip(raw_xrd)
+        assert augmented_xrd.shape == (self.n_postsubsample)
+
         if "xrd" in data_dict.keys():
             assert self.n_postsubsample == 512
             dim = 512
-            prop = prop.view(dim, -1)
-        else:
-            dim = 1
+            augmented_xrd = augmented_xrd.view(dim, -1)
+            assert augmented_xrd.shape == (512, 1)
 
-        # store raw sinc for plotting
-        if self.xrd_filter == 'both':
-            raw_sinc = data_dict['sincOnly']
-            assert self.n_postsubsample == 512
-            raw_sinc = raw_sinc.view(self.n_postsubsample, -1)
-            raw_sinc_presubsample = data_dict['sincOnlyPresubsample']
-            xrd_presubsample = data_dict['xrdPresubsample']
+            plain_xrd = self.sample(raw_xrd.numpy())
+            plain_xrd = plain_xrd.view(dim, -1)
+            assert plain_xrd.shape == (512, 1)
         else:
-            raw_sinc = None
+            raise ValueError('should have xrd')
+            dim = 1
 
         # atom_coords are fractional coordinates
         # edge_index is incremented during batching
@@ -143,53 +131,32 @@ class CrystDataset(Dataset):
             pretty_formula=data_dict['pretty_formula'],
             mpid=data_dict['mp_id'],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=prop,
-            raw_sinc=raw_sinc,
-            raw_sinc_presubsample=raw_sinc_presubsample,
-            xrd_presubsample=xrd_presubsample,
-            raw_xrd=torch.tensor(data_dict['rawXRD'])
+            y=augmented_xrd,
+            raw_xrd=torch.tensor(plain_xrd),
+            nanomaterial_size=curr_nanomaterial_size
         )
         return data
 
     def sinc_filter(self, x):
-        filtered = np.convolve(x, self.sinc_filt, mode='same')
-        return filtered
+        curr_nanomaterial_size = np.random.uniform(low=self.nanomaterial_size_min,
+                                                   high=self.nanomaterial_size_max)
+        curr_sinc_filt = curr_nanomaterial_size * np.sinc((np.pi * curr_nanomaterial_size * self.Qs_shifted)/np.pi)
+        filtered = np.convolve(x, curr_sinc_filt, mode='same')
+        return filtered, curr_nanomaterial_size
     
-    def gaussian_filter(self, x):
-        filtered = gaussian_filter1d(x,
-                    sigma=np.random.uniform(
-                        low=self.n_presubsample * self.horizontal_noise_range[0], 
-                        high=self.n_presubsample * self.horizontal_noise_range[1]
-                    ), 
-                    mode='constant', cval=0)    
-        return filtered
-
-    def augment_xrdStrip(self, curr_xrdStrip, return_both=False):
+    def augment_xrdStrip(self, curr_xrdStrip):
         """
         Input:
         -> curr_xrdStrip: XRD pattern of shape (self.n_presubsample,)
-        -> return_both: if True, return (bothFiltered, rawSincFiltered), only valid if self.xrd_filter == 'both';
-            if False, return based on self.xrd_filter
         Output:
-        -> if return_both=False, 
-            returns curr_xrdStrip augmented by peak broadening (sinc and/or gaussian) & vertical Gaussian perturbations;
+        -> returns curr_xrdStrip augmented by peak broadening (sinc) & vertical Gaussian perturbations;
             with shape (self.n_postsubsample,); in range [0, 1]
-        -> if return_both=True,
-            returns (bothFiltered, rawSincFiltered); where bothFiltered has both sinc filter & gaussian filter,
-            rawSincFiltered has only sinc filter
         """
         xrd = curr_xrdStrip.numpy()
         assert xrd.shape == (self.n_presubsample,)
         # Peak broadening
-        if self.xrd_filter == 'both':
-            sinc_filtered = self.sinc_filter(xrd)
-            filtered = self.gaussian_filter(sinc_filtered)
-            assert filtered.shape == xrd.shape
-        elif self.xrd_filter == 'sinc':
-            filtered = self.sinc_filter(xrd)
-            assert filtered.shape == xrd.shape
-        elif self.xrd_filter == 'gaussian':
-            filtered = self.gaussian_filter(xrd)
+        if self.xrd_filter == 'sinc':
+            filtered, curr_nanomaterial_size = self.sinc_filter(xrd)
             assert filtered.shape == xrd.shape
         else:
             raise ValueError("Invalid filter requested")
@@ -197,21 +164,12 @@ class CrystDataset(Dataset):
         assert filtered.shape == curr_xrdStrip.shape
 
         # presubsamples
-        filtered_presubsample = torch.from_numpy(filtered)
-        sinc_only_presubsample = torch.from_numpy(sinc_filtered)
+        filtered_presubsampled = torch.from_numpy(filtered)
 
         # postsubsampling
         filtered_postsubsampled = self.post_process_filtered_xrd(filtered)
 
-        if return_both: # want to return double filtered & sinc-only filtered
-            assert self.xrd_filter == 'both'
-            assert sinc_filtered.shape == curr_xrdStrip.shape
-            # postsubsampling
-            sinc_only_postsubsample = self.post_process_filtered_xrd(sinc_filtered)
-            assert filtered_presubsample.shape == sinc_only_presubsample.shape == (self.n_presubsample,)
-            assert filtered_postsubsampled.shape == sinc_only_postsubsample.shape == (self.n_postsubsample,)
-            return filtered_postsubsampled, sinc_only_postsubsample, filtered_presubsample, sinc_only_presubsample
-        return filtered_postsubsampled
+        return filtered_postsubsampled, curr_nanomaterial_size
     
     def post_process_filtered_xrd(self, filtered):
         # scale
