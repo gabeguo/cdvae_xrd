@@ -10,7 +10,7 @@ cost_lattice: 10.
 cost_composition: 1.
 cost_edge: 10.
 cost_property: 1.
-beta: 0.01
+beta: 1e-3
 teacher_forcing_lattice: true
 teacher_forcing_max_epoch: ${data.teacher_forcing_max_epoch}
 max_neighbors: 20  # maximum number of neighbors for OTF graph bulding in decoder
