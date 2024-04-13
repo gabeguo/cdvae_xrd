@@ -99,7 +99,7 @@ class CrystDataset(Dataset):
         
         assert raw_xrd.shape == (self.n_presubsample,)
         augmented_xrd, curr_nanomaterial_size = self.augment_xrdStrip(raw_xrd)
-        assert augmented_xrd.shape == (self.n_postsubsample)
+        assert augmented_xrd.shape == (self.n_postsubsample,)
 
         if "xrd" in data_dict.keys():
             assert self.n_postsubsample == 512
