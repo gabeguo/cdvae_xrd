@@ -60,11 +60,11 @@ def plot_overlaid_graphs(xrd_a, xrd_b, xrd_a_label, xrd_b_label, Qs, savepath):
 
     # Plot and fill the area under the first curve
     ax.fill_between(Qs, xrd_a, color="mistyrose", alpha=0.2)
-    ax.plot(Qs, xrd_a, color="red", alpha=0.6, linestyle='dotted', linewidth=2, label=xrd_a_label)  # Dotted curve line with increased linewidth
+    ax.plot(Qs, xrd_a, color="red", alpha=0.6, linewidth=2, label=xrd_a_label)  # Dotted curve line with increased linewidth
 
     # Plot and fill the area under the second curve
     ax.fill_between(Qs, xrd_b, color="lightgreen", alpha=0.2)
-    ax.plot(Qs, xrd_b, color="green", alpha=0.6, linestyle='dashed', linewidth=2, label=xrd_b_label)  # Dotted curve line with increased linewidth
+    ax.plot(Qs, xrd_b, color="green", alpha=0.6, linewidth=2, label=xrd_b_label)  # Dotted curve line with increased linewidth
 
     # Customizing the plot
     ax.set_title("XRD Patterns")

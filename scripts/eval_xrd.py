@@ -21,6 +21,7 @@ from pymatgen.core.structure import Structure
 from pymatgen.core.lattice import Lattice
 from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.io.cif import CifParser
 from pymatgen.io.cif import CifWriter
 
 
@@ -41,9 +42,8 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
     for idx, batch in tqdm(enumerate(loader)):
         ####
         # Set Up
-        ####
-        assert batch.num_nodes.shape == (1,)        
-        assert batch.mpid.shape == (1,)
+        ####     
+        assert len(batch.mpid) == 1
         curr_mpid = batch.mpid[0]
         curr_formula = batch.pretty_formula[0]
 
@@ -52,14 +52,19 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         ####
         # Base Truth
         ####
-        gt_coords = batch.frac_coords
+        gt_frac_coords = batch.frac_coords
         gt_num_atoms = batch.num_atoms
         gt_atom_types = batch.atom_types
         gt_lengths = batch.lengths
         gt_angles = batch.angles
         noisy_given_xrd = batch.y
         gt_raw_xrd = batch.raw_xrd
-        gt_cif = batch.cif
+
+        assert len(batch.cif) == 1
+        gt_cif_parser = CifParser.from_str(batch.cif[0])
+        gt_cif = gt_cif_parser.get_structures()
+        assert len(gt_cif) == 1
+        gt_cif = gt_cif[0]
 
         gt_cif_folder = os.path.join(curr_folder, 'gt', 'cif')
         os.makedirs(gt_cif_folder, exist_ok=True)
@@ -67,8 +72,8 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         gt_cif_writer.write_file(filename=f'{gt_cif_folder}/material{idx}_{curr_mpid}_{curr_formula}_gt.cif')
 
         assert gt_num_atoms.shape == (1,)
-        assert len(gt_coords.shape) == 2
-        assert gt_coords.shape[0] == gt_atom_types.shape[0]
+        assert len(gt_frac_coords.shape) == 2
+        assert gt_frac_coords.shape[0] == gt_atom_types.shape[0]
 
         # Save XRD image
         sample_factor = loader.dataset.n_presubsample // loader.dataset.n_postsubsample
@@ -83,13 +88,20 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         torch.save(noisy_given_xrd, f'{curr_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoisy.pt')
         torch.save(gt_raw_xrd, f'{curr_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoiseless.pt')
         # Save structure image
-        print('shape of coords:', gt_coords.shape)
+        print('shape of coords:', gt_frac_coords.shape)
         print('shape of atom types:', gt_atom_types.shape)
         print('shape of raw xrd:', gt_raw_xrd.shape)
         print('shape of noised xrd:', noisy_given_xrd.shape)
         gt_img_folder = os.path.join(curr_folder, 'gt', 'vis')
         os.makedirs(gt_img_folder, exist_ok=True)
-        pu.plot_material_single(curr_coords=gt_coords, curr_atom_types=gt_atom_types, output_dir=gt_img_folder, 
+        gt_cart_coords, gt_str_atom_types, _, _ = create_materials(args=args, 
+                frac_coords=gt_frac_coords, num_atoms=gt_num_atoms, atom_types=gt_atom_types, 
+                lengths=gt_lengths, angles=gt_angles, create_xrd=False, symprec=1e-3)
+        # TODO: compare this XRD to GT
+        # TODO: check create_materials
+        cart_gt_coords = np.array(gt_cart_coords)[0]
+        str_gt_atom_types = np.array(gt_str_atom_types)[0]
+        pu.plot_material_single(curr_coords=cart_gt_coords, curr_atom_types=str_gt_atom_types, output_dir=gt_img_folder, 
                                 filename=f'structureVis{idx}_{curr_mpid}_{curr_formula}_gt.png')
 
         ####
@@ -102,7 +114,7 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         pred_coords, pred_atom_types, pred_generated_xrds, pred_crystal_list = create_materials(
             args=args, frac_coords=pred_frac_coords, num_atoms=pred_num_atoms,
             atom_types=pred_atom_types, lengths=pred_lengths, angles=pred_angles,
-            create_xrd=True, symprec=0.001)
+            create_xrd=True, symprec=1e-3)
         # See candidates
         assert len(pred_crystal_list) == num_evals
         for eval_idx, the_sample in enumerate(num_evals):
@@ -137,7 +149,6 @@ def reconstruction(idx, batch, model, ld_kwargs, num_evals,
     angles = []
     input_data_list = []
     
-    assert batch.shape[0] == 1
     if torch.cuda.is_available():
         batch.cuda()
     batch_all_frac_coords = []
@@ -152,6 +163,7 @@ def reconstruction(idx, batch, model, ld_kwargs, num_evals,
     for eval_idx in range(num_evals):
         # TODO: speed up by parallel
         gt_num_atoms = batch.num_atoms
+        assert len(gt_num_atoms.shape) == 1
         gt_atom_types = batch.atom_types
         outputs = model.langevin_dynamics(
             z, ld_kwargs, gt_num_atoms, gt_atom_types)
@@ -202,6 +214,7 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
     # Create the XRD calculator
     xrd_calc = XRDCalculator(wavelength=curr_wavelength)
     # get the crystals
+    print(frac_coords.shape, atom_types.shape, num_atoms)
     crystals_list = get_crystals_list(frac_coords=frac_coords, atom_types=atom_types, lengths=lengths, angles=angles, num_atoms=num_atoms)
     # ret vals
     all_coords = list()
@@ -255,27 +268,13 @@ def main(args):
     # load_data if do reconstruction.
     model_path = Path(args.model_path)
     model, test_loader, cfg = load_model(
-        model_path, load_data=('recon' in args.tasks) or
-        ('opt' in args.tasks and args.start_from == 'data'))
+        model_path, load_data=True, batch_size=1)
+    model.eval()
     ld_kwargs = SimpleNamespace(n_step_each=args.n_step_each,
                                 step_lr=args.step_lr,
                                 min_sigma=args.min_sigma,
                                 save_traj=args.save_traj,
                                 disable_bar=args.disable_bar)
-
-    test_dataset = CrystDataset(
-        args.data_dir,
-        filename='test.csv',
-        prop='xrd'
-    )
-    test_dataset.lattice_scaler = torch.load(
-        Path(model_path) / 'lattice_scaler.pt')
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=2,
-    ) 
     
     if torch.cuda.is_available():
         model.to('cuda')
