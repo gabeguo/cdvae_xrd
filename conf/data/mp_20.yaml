@@ -16,6 +16,9 @@ eval_model_name: mp20
 nanomaterial_size_min_angstrom: 10
 nanomaterial_size_max_angstrom: 500
 vertical_noise: 2e-2
+eval_nanomaterial_size_min_angstrom: 100
+eval_nanomaterial_size_max_angstrom: 500
+eval_vertical_noise: 1e-2
 n_presubsample: 4096
 n_postsubsample: 512
 wavesource: CuKa
@@ -59,9 +62,9 @@ datamodule:
         xrd_filter: ${data.xrd_filter}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
-        nanomaterial_size_min_angstrom: ${data.nanomaterial_size_min_angstrom}
-        nanomaterial_size_max_angstrom: ${data.nanomaterial_size_max_angstrom}
-        vertical_noise: ${data.vertical_noise}
+        nanomaterial_size_min_angstrom: ${data.eval_nanomaterial_size_min_angstrom}
+        nanomaterial_size_max_angstrom: ${data.eval_nanomaterial_size_max_angstrom}
+        vertical_noise: ${data.eval_vertical_noise}
         n_presubsample: ${data.n_presubsample}
         n_postsubsample: ${data.n_postsubsample}
         wavesource: ${data.wavesource}
@@ -77,9 +80,9 @@ datamodule:
         xrd_filter: ${data.xrd_filter}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
-        nanomaterial_size_min_angstrom: ${data.nanomaterial_size_min_angstrom}
-        nanomaterial_size_max_angstrom: ${data.nanomaterial_size_max_angstrom}
-        vertical_noise: ${data.vertical_noise}
+        nanomaterial_size_min_angstrom: ${data.eval_nanomaterial_size_min_angstrom}
+        nanomaterial_size_max_angstrom: ${data.eval_nanomaterial_size_max_angstrom}
+        vertical_noise: ${data.eval_vertical_noise}
         n_presubsample: ${data.n_presubsample}
         n_postsubsample: ${data.n_postsubsample}
         wavesource: ${data.wavesource}
@@ -90,6 +93,6 @@ datamodule:
     test: 0
 
   batch_size:
-    train: 512
-    val: 512
-    test: 512
+    train: 256
+    val: 256
+    test: 256
