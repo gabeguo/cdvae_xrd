@@ -39,12 +39,11 @@ Reconstruction code
 def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
                     down_sample_traj_step=1, model_path=None):
     for idx, batch in tqdm(enumerate(loader)):
-        assert batch.shape[0] == 1
-        (frac_coords, num_atoms, atom_types, lengths, angles,
-            all_frac_coords_stack, all_atom_types_stack, input_data_batch) = reconstruction(
-            loader, model, ld_kwargs, args.num_evals,
-            args.down_sample_traj_step, args.model_path)
-        
+        ####
+        # Set Up
+        ####
+        assert batch.num_nodes.shape == (1,)        
+        assert batch.mpid.shape == (1,)
         curr_mpid = batch.mpid[0]
         curr_formula = batch.pretty_formula[0]
 
@@ -67,7 +66,8 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         gt_cif_writer = CifWriter(gt_cif, symprec=1e-4)
         gt_cif_writer.write_file(filename=f'{gt_cif_folder}/material{idx}_{curr_mpid}_{curr_formula}_gt.cif')
 
-        assert gt_num_atoms.shape[0] == 1
+        assert gt_num_atoms.shape == (1,)
+        assert len(gt_coords.shape) == 2
         assert gt_coords.shape[0] == gt_atom_types.shape[0]
 
         # Save XRD image
@@ -85,6 +85,8 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         # Save structure image
         print('shape of coords:', gt_coords.shape)
         print('shape of atom types:', gt_atom_types.shape)
+        print('shape of raw xrd:', gt_raw_xrd.shape)
+        print('shape of noised xrd:', noisy_given_xrd.shape)
         gt_img_folder = os.path.join(curr_folder, 'gt', 'vis')
         os.makedirs(gt_img_folder, exist_ok=True)
         pu.plot_material_single(curr_coords=gt_coords, curr_atom_types=gt_atom_types, output_dir=gt_img_folder, 
@@ -93,11 +95,15 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         ####
         # Predicted materials
         ####
+        (pred_frac_coords, pred_num_atoms, pred_atom_types, pred_lengths, pred_angles,
+            all_frac_coords_stack, all_atom_types_stack, input_data_batch) = reconstruction(
+                idx=idx, batch=batch, model=model, ld_kwargs=ld_kwargs, num_evals=args.num_evals,
+                down_sample_traj_step=args.down_sample_traj_step, model_path=args.model_path)
         pred_coords, pred_atom_types, pred_generated_xrds, pred_crystal_list = create_materials(
-            args=args, frac_coords=frac_coords, num_atoms=num_atoms,
-            atom_types=atom_types, lengths=lengths, angles=angles,
-            create_xrd=True, symprec=0.01)
-        
+            args=args, frac_coords=pred_frac_coords, num_atoms=pred_num_atoms,
+            atom_types=pred_atom_types, lengths=pred_lengths, angles=pred_angles,
+            create_xrd=True, symprec=0.001)
+        # See candidates
         assert len(pred_crystal_list) == num_evals
         for eval_idx, the_sample in enumerate(num_evals):
             the_crystal = Crystal(the_sample)
@@ -239,7 +245,7 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
     if create_xrd:
         assert len(all_coords) == len(all_xrds)
         all_xrds = torch.stack(all_xrds, dim=0).numpy()
-        assert all_xrds.shape == (len(all_coords), 4096)
+        assert all_xrds.shape == (len(all_coords), 512)
 
     return all_coords, all_atom_types, all_xrds, crystals_list
 
@@ -275,33 +281,31 @@ def main(args):
         model.to('cuda')
 
     print('Evaluate model on the reconstruction task.')
-    start_time = time.time()
 
-    reconstruct_all(test_loader, model, ld_kwargs, args.num_evals,
-        args.down_sample_traj_step, args.model_path)
+    reconstruct_all(args=args, loader=test_loader, model=model,
+                    ld_kwargs=ld_kwargs, num_evals=args.num_evals,
+                    down_sample_traj_step=args.down_sample_traj_step, model_path=args.model_path)
 
     return
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # TODO: add args
     parser.add_argument('--model_path', required=True)
-    parser.add_argument('--xrd', action='store_true') # TODO: deprecate option
+    parser.add_argument('--output_dir', default='eval_xrd_output', type=str)
+    parser.add_argument('--wave_source', default='CuKa', type=str)
+    parser.add_argument('--xrd_vector_dim', default=512, type=int)
+    parser.add_argument('--theta_min', default=0, type=int)
+    parser.add_argument('--theta_max', default=180, type=int)
     parser.add_argument('--data_dir', default='data', type=str)
-    parser.add_argument('--tasks', nargs='+', default=['recon', 'gen', 'opt'])
     parser.add_argument('--n_step_each', default=100, type=int)
     parser.add_argument('--step_lr', default=1e-4, type=float)
     parser.add_argument('--min_sigma', default=0, type=float)
     parser.add_argument('--save_traj', default=False, type=bool)
     parser.add_argument('--disable_bar', default=False, type=bool)
-    parser.add_argument('--num_evals', default=1, type=int)
-    parser.add_argument('--num_batches_to_samples', default=20, type=int)
+    parser.add_argument('--num_evals', default=2, type=int)
     parser.add_argument('--start_from', default='data', type=str)
     parser.add_argument('--batch_size', default=1, type=int)
-    parser.add_argument('--force_num_atoms', action='store_true')
-    parser.add_argument('--force_atom_types', action='store_true')
     parser.add_argument('--down_sample_traj_step', default=10, type=int)
-    parser.add_argument('--label', default='')
 
     args = parser.parse_args()
     
