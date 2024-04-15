@@ -36,7 +36,7 @@ import eval_xrd_plotting_utils as pu
 Reconstruction code
 """
 
-def reconstruct_all(loader, model, ld_kwargs, num_evals,
+def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
                     down_sample_traj_step=1, model_path=None):
     for idx, batch in tqdm(enumerate(loader)):
         assert batch.shape[0] == 1
@@ -47,6 +47,8 @@ def reconstruct_all(loader, model, ld_kwargs, num_evals,
         
         curr_mpid = batch.mpid[0]
         curr_formula = batch.pretty_formula[0]
+
+        curr_folder = os.path.join(args.output_dir, f'material{idx}_{curr_mpid}_{curr_formula}')
     
         ####
         # Base Truth
@@ -58,9 +60,10 @@ def reconstruct_all(loader, model, ld_kwargs, num_evals,
         gt_angles = batch.angles
         noisy_given_xrd = batch.y
         gt_raw_xrd = batch.raw_xrd
-
         gt_cif = batch.cif
 
+        gt_cif_folder = os.path.join(curr_folder, 'gt', 'cif')
+        os.makedirs(gt_cif_folder, exist_ok=True)
         gt_cif_writer = CifWriter(gt_cif, symprec=1e-4)
         gt_cif_writer.write_file(filename=f'{gt_cif_folder}/material{idx}_{curr_mpid}_{curr_formula}_gt.cif')
 
@@ -70,14 +73,20 @@ def reconstruct_all(loader, model, ld_kwargs, num_evals,
         # Save XRD image
         sample_factor = loader.dataset.n_presubsample // loader.dataset.n_postsubsample
         downsampled_Qs = loader.dataset.Qs[::sample_factor]
+        gt_xrd_folder = os.path.join(curr_folder, 'gt', 'xrd')
+        os.makedirs(gt_xrd_folder, exist_ok=True)
+        curr_xrd_folder = os.path.join(gt_xrd_folder, f'xrd{idx}_{curr_mpid}_{curr_formula}')
+        os.makedirs(curr_xrd_folder, exist_ok=True)
         pu.plot_overlaid_graphs(xrd_a=noisy_given_xrd, xrd_b=gt_raw_xrd, 
                                 xrd_a_label='GT XRD (noised)', xrd_b_label='GT XRD (no noise)', 
-                                Qs=downsampled_Qs, savepath=f'{gt_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gt.png')
-        torch.save(noisy_given_xrd, f'{gt_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoisy.pt')
-        torch.save(gt_raw_xrd, f'{gt_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoiseless.pt')
+                                Qs=downsampled_Qs, savepath=f'{curr_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gt.png')
+        torch.save(noisy_given_xrd, f'{curr_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoisy.pt')
+        torch.save(gt_raw_xrd, f'{curr_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoiseless.pt')
         # Save structure image
         print('shape of coords:', gt_coords.shape)
         print('shape of atom types:', gt_atom_types.shape)
+        gt_img_folder = os.path.join(curr_folder, 'gt', 'vis')
+        os.makedirs(gt_img_folder, exist_ok=True)
         pu.plot_material_single(curr_coords=gt_coords, curr_atom_types=gt_atom_types, output_dir=gt_img_folder, 
                                 filename=f'structureVis{idx}_{curr_mpid}_{curr_formula}_gt.png')
 
@@ -89,20 +98,22 @@ def reconstruct_all(loader, model, ld_kwargs, num_evals,
             atom_types=atom_types, lengths=lengths, angles=angles,
             create_xrd=True, symprec=0.01)
         
-        curr_pred_folder = 
-    
         assert len(pred_crystal_list) == num_evals
         for eval_idx, the_sample in enumerate(num_evals):
             the_crystal = Crystal(the_sample)
             the_generated_xrd = pred_generated_xrds[eval_idx]
+            pred_cif_folder = os.path.join(curr_folder, 'pred', f'candidate{eval_idx}', 'cif')
+            os.makedirs(pred_cif_folder)
             pred_cif_writer = CifWriter(the_crystal.structure, symprec=1e-3)
             pred_cif_writer.write_file(filename=f'{pred_cif_folder}/material{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.cif')
-            # TODO: write XRD
+            pred_xrd_folder = os.path.join(curr_folder, 'pred', f'candidate{eval_idx}', 'xrd')
+            os.makedirs(pred_xrd_folder)
             pu.plot_overlaid_graphs(xrd_a=the_generated_xrd, xrd_b=gt_raw_xrd, 
                 xrd_a_label='Predicted XRD', xrd_b_label='GT XRD (no noise)', 
                 Qs=downsampled_Qs, savepath=f'{pred_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.png')
             torch.save(the_generated_xrd, f'{pred_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.pt')
-            # TODO: save image
+            pred_img_folder = os.path.join(curr_folder, 'pred', f'candidate{eval_idx}', 'vis')
+            os.makedirs(pred_img_folder)
             pu.plot_material_single(curr_coords=pred_coords, curr_atom_types=pred_atom_types, output_dir=pred_img_folder, 
                 filename=f'structureVis{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.png')
         
@@ -269,27 +280,11 @@ def main(args):
     reconstruct_all(test_loader, model, ld_kwargs, args.num_evals,
         args.down_sample_traj_step, args.model_path)
 
-    if args.label == '':
-        recon_out_name = 'eval_recon.pt'
-    else:
-        recon_out_name = f'eval_recon_{args.label}.pt'
-
-    torch.save({
-        'eval_setting': args,
-        'input_data_batch': input_data_batch,
-        'frac_coords': frac_coords,
-        'num_atoms': num_atoms,
-        'atom_types': atom_types,
-        'lengths': lengths,
-        'angles': angles,
-        'all_frac_coords_stack': all_frac_coords_stack,
-        'all_atom_types_stack': all_atom_types_stack,
-        'time': time.time() - start_time,
-        'xrds': noised_xrds
-    }, model_path / recon_out_name)
+    return
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    # TODO: add args
     parser.add_argument('--model_path', required=True)
     parser.add_argument('--xrd', action='store_true') # TODO: deprecate option
     parser.add_argument('--data_dir', default='data', type=str)
