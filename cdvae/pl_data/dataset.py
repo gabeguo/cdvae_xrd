@@ -129,6 +129,7 @@ class CrystDataset(Dataset):
             num_bonds=edge_indices.shape[0],
             spacegroup=data_dict['spacegroup.number'],
             pretty_formula=data_dict['pretty_formula'],
+            cif=data_dict['cif'],
             mpid=data_dict['mp_id'],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
             y=augmented_xrd.to(dtype=torch.float32),
