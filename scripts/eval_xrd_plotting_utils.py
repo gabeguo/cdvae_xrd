@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
+import os
 
 # Thanks ChatGPT!
 # Thanks https://www.umass.edu/microbio/chime/pe_beta/pe/shared/cpk-rgb.htm
@@ -37,20 +38,27 @@ CPK_COLORS = {
 DEFAULT_COLOR = [255, 20, 147] # Default
 DEFAULT_RADIUS = 0.1
 
+def xrd_torch_to_np(the_xrd):
+    if not isinstance(the_xrd, np.ndarray):
+        the_xrd = the_xrd.detach().cpu().numpy()
+        assert the_xrd.shape == (512, 1)
+        the_xrd = the_xrd.reshape((512,))
+    assert the_xrd.shape == (512,)
+    return the_xrd
+
 """
 Plotting Code for XRD
 """
 # Thanks ChatGPT!
 # If you want to change the colors of the lines and shades, simply modify in the ax.fill_between() and ax.plot() functions
 # A list of possible colors can be found at: https://matplotlib.org/stable/gallery/color/named_colors.html
-def plot_overlaid_graphs(actual, xrd_a, xrd_b, xrd_a_label, xrd_b_label, Qs, savepath):
+def plot_overlaid_graphs(xrd_a, xrd_b, xrd_a_label, xrd_b_label, Qs, savepath):
     fig, ax = plt.subplots()
 
-    # Plot and fill the area under the first curve
-    ax.fill_between(Qs, actual, color="royalblue", alpha=0.2)
-    ax.plot(Qs, actual, color="blue", alpha=0.6, label="Actual")  # Curve line
+    xrd_a = xrd_torch_to_np(xrd_a)
+    xrd_b = xrd_torch_to_np(xrd_b)
 
-    # Plot and fill the area under the second curve
+    # Plot and fill the area under the first curve
     ax.fill_between(Qs, xrd_a, color="mistyrose", alpha=0.2)
     ax.plot(Qs, xrd_a, color="red", alpha=0.6, linestyle='dotted', linewidth=2, label=xrd_a_label)  # Dotted curve line with increased linewidth
 

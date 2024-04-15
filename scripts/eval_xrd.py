@@ -11,14 +11,103 @@ from types import SimpleNamespace
 from torch_geometric.data import Batch
 from torch_geometric.data import DataLoader
 
-
-from eval_utils import load_model
-from cdvae.pl_modules.xrd import XRDEncoder
-from cdvae.pl_data.dataset import CrystXRDDataset
+from eval_utils import load_model, get_crystals_list
+from cdvae.pl_data.dataset import CrystDataset
 from cdvae.common.data_utils import get_scaler_from_data_list
+from compute_metrics import Crystal, RecEval, GenEval
 
-def reconstructon(loader, model, ld_kwargs, num_evals,
-                  force_num_atoms=False, force_atom_types=False, down_sample_traj_step=1, xrd=False, model_path=None):
+from pymatgen.core.periodic_table import Element
+from pymatgen.core.structure import Structure
+from pymatgen.core.lattice import Lattice
+from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.io.cif import CifWriter
+
+
+from scripts.gen_xrd import create_xrd_tensor
+import numpy as np
+
+import warnings
+from tqdm import tqdm
+
+import eval_xrd_plotting_utils as pu
+
+"""
+Reconstruction code
+"""
+
+def reconstruct_all(loader, model, ld_kwargs, num_evals,
+                    down_sample_traj_step=1, model_path=None):
+    for idx, batch in tqdm(enumerate(loader)):
+        assert batch.shape[0] == 1
+        (frac_coords, num_atoms, atom_types, lengths, angles,
+            all_frac_coords_stack, all_atom_types_stack, input_data_batch) = reconstruction(
+            loader, model, ld_kwargs, args.num_evals,
+            args.down_sample_traj_step, args.model_path)
+        
+        curr_mpid = batch.mpid[0]
+        curr_formula = batch.pretty_formula[0]
+    
+        ####
+        # Base Truth
+        ####
+        gt_coords = batch.frac_coords
+        gt_num_atoms = batch.num_atoms
+        gt_atom_types = batch.atom_types
+        gt_lengths = batch.lengths
+        gt_angles = batch.angles
+        noisy_given_xrd = batch.y
+        gt_raw_xrd = batch.raw_xrd
+
+        gt_cif = batch.cif
+
+        gt_cif_writer = CifWriter(gt_cif, symprec=1e-4)
+        gt_cif_writer.write_file(filename=f'{gt_cif_folder}/material{idx}_{curr_mpid}_{curr_formula}_gt.cif')
+
+        assert gt_num_atoms.shape[0] == 1
+        assert gt_coords.shape[0] == gt_atom_types.shape[0]
+
+        # Save XRD image
+        sample_factor = loader.dataset.n_presubsample // loader.dataset.n_postsubsample
+        downsampled_Qs = loader.dataset.Qs[::sample_factor]
+        pu.plot_overlaid_graphs(xrd_a=noisy_given_xrd, xrd_b=gt_raw_xrd, 
+                                xrd_a_label='GT XRD (noised)', xrd_b_label='GT XRD (no noise)', 
+                                Qs=downsampled_Qs, savepath=f'{gt_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gt.png')
+        torch.save(noisy_given_xrd, f'{gt_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoisy.pt')
+        torch.save(gt_raw_xrd, f'{gt_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_gtNoiseless.pt')
+        # Save structure image
+        print('shape of coords:', gt_coords.shape)
+        print('shape of atom types:', gt_atom_types.shape)
+        pu.plot_material_single(curr_coords=gt_coords, curr_atom_types=gt_atom_types, output_dir=gt_img_folder, 
+                                filename=f'structureVis{idx}_{curr_mpid}_{curr_formula}_gt.png')
+
+        ####
+        # Predicted materials
+        ####
+        pred_coords, pred_atom_types, pred_generated_xrds, pred_crystal_list = create_materials(
+            args=args, frac_coords=frac_coords, num_atoms=num_atoms,
+            atom_types=atom_types, lengths=lengths, angles=angles,
+            create_xrd=True, symprec=0.01)
+        
+        curr_pred_folder = 
+    
+        assert len(pred_crystal_list) == num_evals
+        for eval_idx, the_sample in enumerate(num_evals):
+            the_crystal = Crystal(the_sample)
+            the_generated_xrd = pred_generated_xrds[eval_idx]
+            pred_cif_writer = CifWriter(the_crystal.structure, symprec=1e-3)
+            pred_cif_writer.write_file(filename=f'{pred_cif_folder}/material{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.cif')
+            # TODO: write XRD
+            pu.plot_overlaid_graphs(xrd_a=the_generated_xrd, xrd_b=gt_raw_xrd, 
+                xrd_a_label='Predicted XRD', xrd_b_label='GT XRD (no noise)', 
+                Qs=downsampled_Qs, savepath=f'{pred_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.png')
+            torch.save(the_generated_xrd, f'{pred_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.pt')
+            # TODO: save image
+            pu.plot_material_single(curr_coords=pred_coords, curr_atom_types=pred_atom_types, output_dir=pred_img_folder, 
+                filename=f'structureVis{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.png')
+        
+def reconstruction(idx, batch, model, ld_kwargs, num_evals,
+                  down_sample_traj_step=1, model_path=None):
     """
     reconstruct the crystals in <loader>.
     """
@@ -30,61 +119,50 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
     lengths = []
     angles = []
     input_data_list = []
-
-    if xrd:
-        xrd_encoder = XRDEncoder().to('cuda' if torch.cuda.is_available() else 'cpu')
-        xrd_encoder.load_state_dict(torch.load(os.path.join(model_path, 'xrd_enc.pt')))
-        all_noised_xrds = list()
     
-    for idx, batch in enumerate(loader):
-        if xrd:
-            batch, xrd_data = batch 
-        if torch.cuda.is_available():
-            batch.cuda()
-        print(f'batch {idx} in {len(loader)}')
-        batch_all_frac_coords = []
-        batch_all_atom_types = []
-        batch_frac_coords, batch_num_atoms, batch_atom_types = [], [], []
-        batch_lengths, batch_angles = [], []
+    assert batch.shape[0] == 1
+    if torch.cuda.is_available():
+        batch.cuda()
+    batch_all_frac_coords = []
+    batch_all_atom_types = []
+    batch_frac_coords, batch_num_atoms, batch_atom_types = [], [], []
+    batch_lengths, batch_angles = [], []
 
-        # only sample one z, multiple evals for stoichaticity in langevin dynamics
-        if xrd:
-            z = xrd_encoder(xrd_data.cuda().unsqueeze(1))
-            assert xrd_data.shape[1] == 512
-            all_noised_xrds.append(xrd_data)
-        else:
-            _, _, z = model.encode(batch)
+    # Note that the z comes from XRD
+    # only sample one z, multiple evals for stoichaticity in langevin dynamics
+    _, _, z = model.encode(batch)
 
-        for eval_idx in range(num_evals):
-            gt_num_atoms = batch.num_atoms if force_num_atoms else None
-            gt_atom_types = batch.atom_types if force_atom_types else None
-            outputs = model.langevin_dynamics(
-                z, ld_kwargs, gt_num_atoms, gt_atom_types)
+    for eval_idx in range(num_evals):
+        # TODO: speed up by parallel
+        gt_num_atoms = batch.num_atoms
+        gt_atom_types = batch.atom_types
+        outputs = model.langevin_dynamics(
+            z, ld_kwargs, gt_num_atoms, gt_atom_types)
 
-            # collect sampled crystals in this batch.
-            batch_frac_coords.append(outputs['frac_coords'].detach().cpu())
-            batch_num_atoms.append(outputs['num_atoms'].detach().cpu())
-            batch_atom_types.append(outputs['atom_types'].detach().cpu())
-            batch_lengths.append(outputs['lengths'].detach().cpu())
-            batch_angles.append(outputs['angles'].detach().cpu())
-            if ld_kwargs.save_traj:
-                batch_all_frac_coords.append(
-                    outputs['all_frac_coords'][::down_sample_traj_step].detach().cpu())
-                batch_all_atom_types.append(
-                    outputs['all_atom_types'][::down_sample_traj_step].detach().cpu())
-        # collect sampled crystals for this z.
-        frac_coords.append(torch.stack(batch_frac_coords, dim=0))
-        num_atoms.append(torch.stack(batch_num_atoms, dim=0))
-        atom_types.append(torch.stack(batch_atom_types, dim=0))
-        lengths.append(torch.stack(batch_lengths, dim=0))
-        angles.append(torch.stack(batch_angles, dim=0))
+        # collect sampled crystals in this batch.
+        batch_frac_coords.append(outputs['frac_coords'].detach().cpu())
+        batch_num_atoms.append(outputs['num_atoms'].detach().cpu())
+        batch_atom_types.append(outputs['atom_types'].detach().cpu())
+        batch_lengths.append(outputs['lengths'].detach().cpu())
+        batch_angles.append(outputs['angles'].detach().cpu())
         if ld_kwargs.save_traj:
-            all_frac_coords_stack.append(
-                torch.stack(batch_all_frac_coords, dim=0))
-            all_atom_types_stack.append(
-                torch.stack(batch_all_atom_types, dim=0))
-        # Save the ground truth structure
-        input_data_list = input_data_list + batch.to_data_list()
+            batch_all_frac_coords.append(
+                outputs['all_frac_coords'][::down_sample_traj_step].detach().cpu())
+            batch_all_atom_types.append(
+                outputs['all_atom_types'][::down_sample_traj_step].detach().cpu())
+    # collect sampled crystals for this z.
+    frac_coords.append(torch.stack(batch_frac_coords, dim=0))
+    num_atoms.append(torch.stack(batch_num_atoms, dim=0))
+    atom_types.append(torch.stack(batch_atom_types, dim=0))
+    lengths.append(torch.stack(batch_lengths, dim=0))
+    angles.append(torch.stack(batch_angles, dim=0))
+    if ld_kwargs.save_traj:
+        all_frac_coords_stack.append(
+            torch.stack(batch_all_frac_coords, dim=0))
+        all_atom_types_stack.append(
+            torch.stack(batch_all_atom_types, dim=0))
+    # Save the ground truth structure
+    input_data_list = input_data_list + batch.to_data_list()
 
     frac_coords = torch.cat(frac_coords, dim=1)
     num_atoms = torch.cat(num_atoms, dim=1)
@@ -99,103 +177,62 @@ def reconstructon(loader, model, ld_kwargs, num_evals,
     ret_val = [
         frac_coords, num_atoms, atom_types, lengths, angles,
         all_frac_coords_stack, all_atom_types_stack, input_data_batch]
-    if xrd:
-        all_noised_xrds = torch.cat(all_noised_xrds, dim=0)
-        assert all_noised_xrds.shape == (len(loader.dataset), 512)
-        ret_val.append(all_noised_xrds)
-    else:
-        ret_val.append(None)
     return ret_val
 
+def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=False, symprec=0.01):
+    # wavelength
+    curr_wavelength = WAVELENGTHS[args.wave_source]
+    # Create the XRD calculator
+    xrd_calc = XRDCalculator(wavelength=curr_wavelength)
+    # get the crystals
+    crystals_list = get_crystals_list(frac_coords=frac_coords, atom_types=atom_types, lengths=lengths, angles=angles, num_atoms=num_atoms)
+    # ret vals
+    all_coords = list()
+    all_atom_types = list()
+    all_xrds = list()
+    # loop through and process the crystals
+    for i in tqdm(range(len(crystals_list))):
+        curr_crystal = crystals_list[i]
+        curr_structure = Structure(
+            lattice=Lattice.from_parameters(
+                *(curr_crystal['lengths'].tolist() + curr_crystal['angles'].tolist())),
+            species=curr_crystal['atom_types'], coords=curr_crystal['frac_coords'], coords_are_cartesian=False)
+        
+        curr_coords = list()
+        curr_atom_types = list()
 
-def generation(model, ld_kwargs, num_batches_to_sample, num_samples_per_z,
-               batch_size=512, down_sample_traj_step=1):
-    all_frac_coords_stack = []
-    all_atom_types_stack = []
-    frac_coords = []
-    num_atoms = []
-    atom_types = []
-    lengths = []
-    angles = []
+        for site in curr_structure:
+            curr_coords.append([site.x, site.y, site.z])
+            curr_atom_types.append(Element(site.species_string))
 
-    for z_idx in range(num_batches_to_sample):
-        batch_all_frac_coords = []
-        batch_all_atom_types = []
-        batch_frac_coords, batch_num_atoms, batch_atom_types = [], [], []
-        batch_lengths, batch_angles = [], []
+        if create_xrd:
+            try:
+                sga = SpacegroupAnalyzer(curr_structure, symprec=symprec)
+                conventional_structure = sga.get_conventional_standard_structure()
+            except:
+                warnings.warn(f"Failed to get conventional standard structure for material {i}")
+                conventional_structure = curr_structure
+            # Calculate the XRD pattern
+            pattern = xrd_calc.get_pattern(conventional_structure)
+            # Create the XRD tensor
+            xrd_tensor = create_xrd_tensor(args, pattern)
+            all_xrds.append(xrd_tensor)
+        
+        all_coords.append(np.array(curr_coords))
+        all_atom_types.append(curr_atom_types)
+    
+    assert len(all_coords) == len(all_atom_types)
+    assert len(all_coords) == len(num_atoms)
+    assert len(crystals_list) == len(all_coords)
 
-        z = torch.randn(batch_size, model.hparams.hidden_dim,
-                        device=model.device)
+    if create_xrd:
+        assert len(all_coords) == len(all_xrds)
+        all_xrds = torch.stack(all_xrds, dim=0).numpy()
+        assert all_xrds.shape == (len(all_coords), 4096)
 
-        for sample_idx in range(num_samples_per_z):
-            samples = model.langevin_dynamics(z, ld_kwargs)
+    return all_coords, all_atom_types, all_xrds, crystals_list
 
-            # collect sampled crystals in this batch.
-            batch_frac_coords.append(samples['frac_coords'].detach().cpu())
-            batch_num_atoms.append(samples['num_atoms'].detach().cpu())
-            batch_atom_types.append(samples['atom_types'].detach().cpu())
-            batch_lengths.append(samples['lengths'].detach().cpu())
-            batch_angles.append(samples['angles'].detach().cpu())
-            if ld_kwargs.save_traj:
-                batch_all_frac_coords.append(
-                    samples['all_frac_coords'][::down_sample_traj_step].detach().cpu())
-                batch_all_atom_types.append(
-                    samples['all_atom_types'][::down_sample_traj_step].detach().cpu())
-
-        # collect sampled crystals for this z.
-        frac_coords.append(torch.stack(batch_frac_coords, dim=0))
-        num_atoms.append(torch.stack(batch_num_atoms, dim=0))
-        atom_types.append(torch.stack(batch_atom_types, dim=0))
-        lengths.append(torch.stack(batch_lengths, dim=0))
-        angles.append(torch.stack(batch_angles, dim=0))
-        if ld_kwargs.save_traj:
-            all_frac_coords_stack.append(
-                torch.stack(batch_all_frac_coords, dim=0))
-            all_atom_types_stack.append(
-                torch.stack(batch_all_atom_types, dim=0))
-
-    frac_coords = torch.cat(frac_coords, dim=1)
-    num_atoms = torch.cat(num_atoms, dim=1)
-    atom_types = torch.cat(atom_types, dim=1)
-    lengths = torch.cat(lengths, dim=1)
-    angles = torch.cat(angles, dim=1)
-    if ld_kwargs.save_traj:
-        all_frac_coords_stack = torch.cat(all_frac_coords_stack, dim=2)
-        all_atom_types_stack = torch.cat(all_atom_types_stack, dim=2)
-    return (frac_coords, num_atoms, atom_types, lengths, angles,
-            all_frac_coords_stack, all_atom_types_stack)
-
-
-def optimization(model, ld_kwargs, data_loader,
-                 num_starting_points=100, num_gradient_steps=20000,
-                 lr=1e-2):
-    assert data_loader is not None
-
-    batch = next(iter(data_loader)).to(model.device)
-    # Initialize random latent codes! (Nonsensical to encode, then decode)
-    z = torch.randn(num_starting_points, model.hparams.hidden_dim,
-                    device=model.device)
-    z.requires_grad = True
-    noisy_xrds = batch.y.reshape(-1, 512)[:num_starting_points]
-
-    opt = Adam([z], lr=lr)
-    model.freeze()
-
-    all_crystals = []
-    for i in range(num_gradient_steps):
-        opt.zero_grad()
-        loss = F.mse_loss(model.fc_property(z), noisy_xrds)
-        print(f'predicted property loss: {loss.item()}')
-        loss.backward()
-        opt.step()
-        if i == (num_gradient_steps-1):
-            crystals = model.langevin_dynamics(z, ld_kwargs)
-            all_crystals.append(crystals)
-    dict = {k: torch.cat([d[k] for d in all_crystals]).unsqueeze(0) for k in
-            ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
-    dict['xrds'] = noisy_xrds
-    return dict, batch
-
+# TODO: metrics
 
 def main(args):
     # load_data if do reconstruction.
@@ -208,102 +245,48 @@ def main(args):
                                 min_sigma=args.min_sigma,
                                 save_traj=args.save_traj,
                                 disable_bar=args.disable_bar)
-    # overwrite
-    if args.xrd: # TODO: remove
-        dataset_to_prop = {
-            'perov_5': 'heat_ref',
-            'mp_20': 'formation_energy_per_atom',
-            'carbon_24': 'energy_per_atom'
-        }
-        # test loader
-        test_dataset = CrystXRDDataset(
-            args.data_dir,
-            filename='test.csv',
-            prop=dataset_to_prop[args.model_path.split('/')[-1]]
-        )
-        test_dataset.lattice_scaler = torch.load(
-            Path(model_path) / 'lattice_scaler.pt')
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=2,
-        ) 
+
+    test_dataset = CrystDataset(
+        args.data_dir,
+        filename='test.csv',
+        prop='xrd'
+    )
+    test_dataset.lattice_scaler = torch.load(
+        Path(model_path) / 'lattice_scaler.pt')
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=2,
+    ) 
     
     if torch.cuda.is_available():
         model.to('cuda')
 
-    if 'recon' in args.tasks:
-        print('Evaluate model on the reconstruction task.')
-        start_time = time.time()
-        (frac_coords, num_atoms, atom_types, lengths, angles,
-         all_frac_coords_stack, all_atom_types_stack, input_data_batch, noised_xrds) = reconstructon(
-            test_loader, model, ld_kwargs, args.num_evals,
-            args.force_num_atoms, args.force_atom_types, args.down_sample_traj_step, args.xrd, args.model_path)
+    print('Evaluate model on the reconstruction task.')
+    start_time = time.time()
 
-        if args.label == '':
-            recon_out_name = 'eval_recon.pt'
-        else:
-            recon_out_name = f'eval_recon_{args.label}.pt'
+    reconstruct_all(test_loader, model, ld_kwargs, args.num_evals,
+        args.down_sample_traj_step, args.model_path)
 
-        torch.save({
-            'eval_setting': args,
-            'input_data_batch': input_data_batch,
-            'frac_coords': frac_coords,
-            'num_atoms': num_atoms,
-            'atom_types': atom_types,
-            'lengths': lengths,
-            'angles': angles,
-            'all_frac_coords_stack': all_frac_coords_stack,
-            'all_atom_types_stack': all_atom_types_stack,
-            'time': time.time() - start_time,
-            'xrds': noised_xrds
-        }, model_path / recon_out_name)
+    if args.label == '':
+        recon_out_name = 'eval_recon.pt'
+    else:
+        recon_out_name = f'eval_recon_{args.label}.pt'
 
-    if 'gen' in args.tasks:
-        print('Evaluate model on the generation task.')
-        start_time = time.time()
-
-        (frac_coords, num_atoms, atom_types, lengths, angles,
-         all_frac_coords_stack, all_atom_types_stack) = generation(
-            model, ld_kwargs, args.num_batches_to_samples, args.num_evals,
-            args.batch_size, args.down_sample_traj_step)
-
-        if args.label == '':
-            gen_out_name = 'eval_gen.pt'
-        else:
-            gen_out_name = f'eval_gen_{args.label}.pt'
-
-        torch.save({
-            'eval_setting': args,
-            'frac_coords': frac_coords,
-            'num_atoms': num_atoms,
-            'atom_types': atom_types,
-            'lengths': lengths,
-            'angles': angles,
-            'all_frac_coords_stack': all_frac_coords_stack,
-            'all_atom_types_stack': all_atom_types_stack,
-            'time': time.time() - start_time
-        }, model_path / gen_out_name)
-
-    if 'opt' in args.tasks:
-        print('Evaluate model on the property optimization task.')
-        start_time = time.time()
-        if args.start_from == 'data':
-            loader = test_loader
-        else:
-            loader = None
-        optimized_crystals, data = optimization(model, ld_kwargs, loader)
-        optimized_crystals.update({'data': data,
-                                   'eval_setting': args,
-                                   'time': time.time() - start_time})
-
-        if args.label == '':
-            gen_out_name = 'eval_opt.pt'
-        else:
-            gen_out_name = f'eval_opt_{args.label}.pt'
-        torch.save(optimized_crystals, model_path / gen_out_name)
-
+    torch.save({
+        'eval_setting': args,
+        'input_data_batch': input_data_batch,
+        'frac_coords': frac_coords,
+        'num_atoms': num_atoms,
+        'atom_types': atom_types,
+        'lengths': lengths,
+        'angles': angles,
+        'all_frac_coords_stack': all_frac_coords_stack,
+        'all_atom_types_stack': all_atom_types_stack,
+        'time': time.time() - start_time,
+        'xrds': noised_xrds
+    }, model_path / recon_out_name)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -319,13 +302,15 @@ if __name__ == '__main__':
     parser.add_argument('--num_evals', default=1, type=int)
     parser.add_argument('--num_batches_to_samples', default=20, type=int)
     parser.add_argument('--start_from', default='data', type=str)
-    parser.add_argument('--batch_size', default=500, type=int)
+    parser.add_argument('--batch_size', default=1, type=int)
     parser.add_argument('--force_num_atoms', action='store_true')
     parser.add_argument('--force_atom_types', action='store_true')
     parser.add_argument('--down_sample_traj_step', default=10, type=int)
     parser.add_argument('--label', default='')
 
     args = parser.parse_args()
+    
+    assert args.batch_size == 1
 
     print('starting eval', args)
     main(args)
