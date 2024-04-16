@@ -252,7 +252,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_sigma', default=0, type=float)
     parser.add_argument('--save_traj', default=False, type=bool)
     parser.add_argument('--disable_bar', default=False, type=bool)
-    parser.add_argument('--num_evals', default=2, type=int)
+    parser.add_argument('--num_evals', default=5, type=int)
     parser.add_argument('--start_from', default='data', type=str)
     parser.add_argument('--batch_size', default=1, type=int)
     parser.add_argument('--down_sample_traj_step', default=10, type=int)
