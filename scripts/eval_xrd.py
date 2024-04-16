@@ -37,16 +37,6 @@ import eval_xrd_plotting_utils as pu
 Reconstruction code
 """
 
-def create_xrd_args(num_evals):
-    alt_args = SimpleNamespace()
-    alt_args.wave_source = 'CuKa'
-    alt_args.num_materials = num_evals
-    alt_args.xrd_vector_dim = 4096
-    alt_args.max_theta = 180
-    alt_args.min_theta = 0
-
-    return alt_args
-
 def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
                     down_sample_traj_step=1, model_path=None):
     for idx, batch in tqdm(enumerate(loader)):
@@ -105,9 +95,7 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         gt_img_folder = os.path.join(curr_folder, 'gt', 'vis')
         os.makedirs(gt_img_folder, exist_ok=True)
 
-        xrd_args = create_xrd_args(num_evals)
-
-        gt_cart_coords, gt_str_atom_types, _, _ = create_materials(args=xrd_args, 
+        gt_cart_coords, gt_str_atom_types, _, _ = create_materials(args=args, 
                 frac_coords=gt_frac_coords, num_atoms=gt_num_atoms, atom_types=gt_atom_types, 
                 lengths=gt_lengths, angles=gt_angles, create_xrd=False, symprec=1e-3)
         # TODO: compare this XRD to GT
@@ -122,7 +110,7 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         ####
         pred_frac_coords, pred_num_atoms, pred_atom_types, pred_lengths, pred_angles = reconstruction(batch=batch, model=model, ld_kwargs=ld_kwargs, num_evals=args.num_evals)
         pred_coords, pred_atom_types, pred_generated_xrds, pred_crystal_list = create_materials(
-            args=xrd_args, frac_coords=pred_frac_coords, num_atoms=pred_num_atoms,
+            args=args, frac_coords=pred_frac_coords, num_atoms=pred_num_atoms,
             atom_types=pred_atom_types, lengths=pred_lengths, angles=pred_angles,
             create_xrd=True, symprec=1e-3)
         # See candidates
@@ -221,7 +209,7 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
         assert len(all_coords) == len(all_xrds)
         all_xrds = torch.stack(all_xrds, dim=0).numpy()
         print("all_xrds shape:", all_xrds.shape)
-        assert all_xrds.shape == (len(all_coords), 4096)
+        assert all_xrds.shape == (len(all_coords), 512)
 
     return np.array(all_coords), np.array(all_atom_types), all_xrds, crystals_list
 
