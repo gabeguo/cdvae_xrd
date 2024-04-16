@@ -107,8 +107,7 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         ####
         # Predicted materials
         ####
-        (pred_frac_coords, pred_num_atoms, pred_atom_types, pred_lengths, pred_angles,
-            all_frac_coords_stack, all_atom_types_stack, input_data_batch) = reconstruction(
+        (pred_frac_coords, pred_num_atoms, pred_atom_types, pred_lengths, pred_angles) = reconstruction(
                 idx=idx, batch=batch, model=model, ld_kwargs=ld_kwargs, num_evals=args.num_evals,
                 down_sample_traj_step=args.down_sample_traj_step, model_path=args.model_path)
         pred_coords, pred_atom_types, pred_generated_xrds, pred_crystal_list = create_materials(
@@ -117,22 +116,22 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
             create_xrd=True, symprec=1e-3)
         # See candidates
         assert len(pred_crystal_list) == num_evals
-        for eval_idx, the_sample in enumerate(num_evals):
+        for eval_idx, the_sample in enumerate(pred_crystal_list):
             the_crystal = Crystal(the_sample)
             the_generated_xrd = pred_generated_xrds[eval_idx]
             pred_cif_folder = os.path.join(curr_folder, 'pred', f'candidate{eval_idx}', 'cif')
-            os.makedirs(pred_cif_folder)
+            os.makedirs(pred_cif_folder, exist_ok=True)
             pred_cif_writer = CifWriter(the_crystal.structure, symprec=1e-3)
             pred_cif_writer.write_file(filename=f'{pred_cif_folder}/material{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.cif')
             pred_xrd_folder = os.path.join(curr_folder, 'pred', f'candidate{eval_idx}', 'xrd')
-            os.makedirs(pred_xrd_folder)
+            os.makedirs(pred_xrd_folder, exist_ok=True)
             pu.plot_overlaid_graphs(xrd_a=the_generated_xrd, xrd_b=gt_raw_xrd, 
                 xrd_a_label='Predicted XRD', xrd_b_label='GT XRD (no noise)', 
                 Qs=downsampled_Qs, savepath=f'{pred_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.png')
             torch.save(the_generated_xrd, f'{pred_xrd_folder}/xrd{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.pt')
             pred_img_folder = os.path.join(curr_folder, 'pred', f'candidate{eval_idx}', 'vis')
-            os.makedirs(pred_img_folder)
-            pu.plot_material_single(curr_coords=pred_coords, curr_atom_types=pred_atom_types, output_dir=pred_img_folder, 
+            os.makedirs(pred_img_folder, exist_ok=True)
+            pu.plot_material_single(curr_coords=pred_coords[eval_idx], curr_atom_types=pred_atom_types[eval_idx], output_dir=pred_img_folder, 
                 filename=f'structureVis{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.png')
         
 def reconstruction(idx, batch, model, ld_kwargs, num_evals,
@@ -140,72 +139,37 @@ def reconstruction(idx, batch, model, ld_kwargs, num_evals,
     """
     reconstruct the crystals in <loader>.
     """
-    all_frac_coords_stack = []
-    all_atom_types_stack = []
-    frac_coords = []
-    num_atoms = []
-    atom_types = []
-    lengths = []
-    angles = []
-    input_data_list = []
-    
     if torch.cuda.is_available():
         batch.cuda()
-    batch_all_frac_coords = []
-    batch_all_atom_types = []
-    batch_frac_coords, batch_num_atoms, batch_atom_types = [], [], []
-    batch_lengths, batch_angles = [], []
 
     # Note that the z comes from XRD
     # only sample one z, multiple evals for stoichaticity in langevin dynamics
     _, _, z = model.encode(batch)
 
-    for eval_idx in range(num_evals):
-        # TODO: speed up by parallel
-        gt_num_atoms = batch.num_atoms
-        assert len(gt_num_atoms.shape) == 1
-        gt_atom_types = batch.atom_types
-        outputs = model.langevin_dynamics(
-            z, ld_kwargs, gt_num_atoms, gt_atom_types)
+    print('latent shape', z.shape)
+    z = z.expand(num_evals, -1)
+    assert z.shape == (num_evals, 256)
+    init_num_atoms = batch.num_atoms.repeat(num_evals) # PyG wants them sequentially
+    init_atom_types = batch.atom_types.repeat(num_evals) # PyG wants the sequentially
+    assert len(init_num_atoms.shape) == 1
+    assert len(init_atom_types.shape) == 1
+    outputs = model.langevin_dynamics(z, ld_kwargs, init_num_atoms, init_atom_types)
 
-        # collect sampled crystals in this batch.
-        batch_frac_coords.append(outputs['frac_coords'].detach().cpu())
-        batch_num_atoms.append(outputs['num_atoms'].detach().cpu())
-        batch_atom_types.append(outputs['atom_types'].detach().cpu())
-        batch_lengths.append(outputs['lengths'].detach().cpu())
-        batch_angles.append(outputs['angles'].detach().cpu())
-        if ld_kwargs.save_traj:
-            batch_all_frac_coords.append(
-                outputs['all_frac_coords'][::down_sample_traj_step].detach().cpu())
-            batch_all_atom_types.append(
-                outputs['all_atom_types'][::down_sample_traj_step].detach().cpu())
-    # collect sampled crystals for this z.
-    frac_coords.append(torch.stack(batch_frac_coords, dim=0))
-    num_atoms.append(torch.stack(batch_num_atoms, dim=0))
-    atom_types.append(torch.stack(batch_atom_types, dim=0))
-    lengths.append(torch.stack(batch_lengths, dim=0))
-    angles.append(torch.stack(batch_angles, dim=0))
-    if ld_kwargs.save_traj:
-        all_frac_coords_stack.append(
-            torch.stack(batch_all_frac_coords, dim=0))
-        all_atom_types_stack.append(
-            torch.stack(batch_all_atom_types, dim=0))
-    # Save the ground truth structure
-    input_data_list = input_data_list + batch.to_data_list()
+    # collect sampled crystals in this batch.
+    frac_coords = outputs['frac_coords'].detach().cpu()
+    num_atoms = outputs['num_atoms'].detach().cpu()
+    atom_types = outputs['atom_types'].detach().cpu()
+    lengths = outputs['lengths'].detach().cpu()
+    angles = outputs['angles'].detach().cpu()
 
-    frac_coords = torch.cat(frac_coords, dim=1)
-    num_atoms = torch.cat(num_atoms, dim=1)
-    atom_types = torch.cat(atom_types, dim=1)
-    lengths = torch.cat(lengths, dim=1)
-    angles = torch.cat(angles, dim=1)
-    if ld_kwargs.save_traj:
-        all_frac_coords_stack = torch.cat(all_frac_coords_stack, dim=2)
-        all_atom_types_stack = torch.cat(all_atom_types_stack, dim=2)
-    input_data_batch = Batch.from_data_list(input_data_list)
+    print('frac coords shape', frac_coords.shape) # (num_crystals * atoms_per_crystal, 3)
+    print('num atoms shape:', num_atoms.shape) # (num_crystals,)
+    print('atom types shape:', atom_types.shape) # (num_crystals * atoms_per_crystal,)
+    print('lengths shape:', lengths.shape) # (num_crystals, 3)
+    print('angles shape:', angles.shape) # (num_crystals, 3)
 
     ret_val = [
-        frac_coords, num_atoms, atom_types, lengths, angles,
-        all_frac_coords_stack, all_atom_types_stack, input_data_batch]
+        frac_coords, num_atoms, atom_types, lengths, angles]
     return ret_val
 
 def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=False, symprec=0.01):
@@ -260,7 +224,7 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
         all_xrds = torch.stack(all_xrds, dim=0).numpy()
         assert all_xrds.shape == (len(all_coords), 512)
 
-    return all_coords, all_atom_types, all_xrds, crystals_list
+    return np.array(all_coords), np.array(all_atom_types), all_xrds, crystals_list
 
 # TODO: metrics
 
@@ -293,8 +257,8 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', default='eval_xrd_output', type=str)
     parser.add_argument('--wave_source', default='CuKa', type=str)
     parser.add_argument('--xrd_vector_dim', default=512, type=int)
-    parser.add_argument('--theta_min', default=0, type=int)
-    parser.add_argument('--theta_max', default=180, type=int)
+    parser.add_argument('--min_theta', default=0, type=int, help='Actually 2 theta, but for legacy reasons, do not change')
+    parser.add_argument('--max_theta', default=180, type=int, help='Actually 2 theta, but for legacy reasons, do not change')
     parser.add_argument('--data_dir', default='data', type=str)
     parser.add_argument('--n_step_each', default=100, type=int)
     parser.add_argument('--step_lr', default=1e-4, type=float)
