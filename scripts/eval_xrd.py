@@ -37,6 +37,16 @@ import eval_xrd_plotting_utils as pu
 Reconstruction code
 """
 
+def create_xrd_args(num_evals):
+    alt_args = SimpleNamespace()
+    alt_args.wave_source = 'CuKa'
+    alt_args.num_materials = num_evals
+    alt_args.xrd_vector_dim = 4096
+    alt_args.max_theta = 180
+    alt_args.min_theta = 0
+
+    return alt_args
+
 def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
                     down_sample_traj_step=1, model_path=None):
     for idx, batch in tqdm(enumerate(loader)):
@@ -94,7 +104,10 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         print('shape of noised xrd:', noisy_given_xrd.shape)
         gt_img_folder = os.path.join(curr_folder, 'gt', 'vis')
         os.makedirs(gt_img_folder, exist_ok=True)
-        gt_cart_coords, gt_str_atom_types, _, _ = create_materials(args=args, 
+
+        xrd_args = create_xrd_args(num_evals)
+
+        gt_cart_coords, gt_str_atom_types, _, _ = create_materials(args=xrd_args, 
                 frac_coords=gt_frac_coords, num_atoms=gt_num_atoms, atom_types=gt_atom_types, 
                 lengths=gt_lengths, angles=gt_angles, create_xrd=False, symprec=1e-3)
         # TODO: compare this XRD to GT
@@ -107,11 +120,9 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
         ####
         # Predicted materials
         ####
-        (pred_frac_coords, pred_num_atoms, pred_atom_types, pred_lengths, pred_angles) = reconstruction(
-                idx=idx, batch=batch, model=model, ld_kwargs=ld_kwargs, num_evals=args.num_evals,
-                down_sample_traj_step=args.down_sample_traj_step, model_path=args.model_path)
+        pred_frac_coords, pred_num_atoms, pred_atom_types, pred_lengths, pred_angles = reconstruction(batch=batch, model=model, ld_kwargs=ld_kwargs, num_evals=args.num_evals)
         pred_coords, pred_atom_types, pred_generated_xrds, pred_crystal_list = create_materials(
-            args=args, frac_coords=pred_frac_coords, num_atoms=pred_num_atoms,
+            args=xrd_args, frac_coords=pred_frac_coords, num_atoms=pred_num_atoms,
             atom_types=pred_atom_types, lengths=pred_lengths, angles=pred_angles,
             create_xrd=True, symprec=1e-3)
         # See candidates
@@ -134,42 +145,29 @@ def reconstruct_all(args, loader, model, ld_kwargs, num_evals,
             pu.plot_material_single(curr_coords=pred_coords[eval_idx], curr_atom_types=pred_atom_types[eval_idx], output_dir=pred_img_folder, 
                 filename=f'structureVis{idx}_{curr_mpid}_{curr_formula}_pred{eval_idx}.png')
         
-def reconstruction(idx, batch, model, ld_kwargs, num_evals,
-                  down_sample_traj_step=1, model_path=None):
+def reconstruction(batch, model, ld_kwargs, num_evals):
     """
     reconstruct the crystals in <loader>.
     """
+    
     if torch.cuda.is_available():
         batch.cuda()
 
     # Note that the z comes from XRD
     # only sample one z, multiple evals for stoichaticity in langevin dynamics
     _, _, z = model.encode(batch)
-
-    print('latent shape', z.shape)
+    
+    # broadcast z to the batch size
     z = z.expand(num_evals, -1)
-    assert z.shape == (num_evals, 256)
-    init_num_atoms = batch.num_atoms.repeat(num_evals) # PyG wants them sequentially
-    init_atom_types = batch.atom_types.repeat(num_evals) # PyG wants the sequentially
-    assert len(init_num_atoms.shape) == 1
-    assert len(init_atom_types.shape) == 1
-    outputs = model.langevin_dynamics(z, ld_kwargs, init_num_atoms, init_atom_types)
-
-    # collect sampled crystals in this batch.
-    frac_coords = outputs['frac_coords'].detach().cpu()
-    num_atoms = outputs['num_atoms'].detach().cpu()
-    atom_types = outputs['atom_types'].detach().cpu()
-    lengths = outputs['lengths'].detach().cpu()
-    angles = outputs['angles'].detach().cpu()
-
-    print('frac coords shape', frac_coords.shape) # (num_crystals * atoms_per_crystal, 3)
-    print('num atoms shape:', num_atoms.shape) # (num_crystals,)
-    print('atom types shape:', atom_types.shape) # (num_crystals * atoms_per_crystal,)
-    print('lengths shape:', lengths.shape) # (num_crystals, 3)
-    print('angles shape:', angles.shape) # (num_crystals, 3)
-
-    ret_val = [
-        frac_coords, num_atoms, atom_types, lengths, angles]
+    # print('z shape:', z.shape)
+    # for eval_idx in range(num_evals):
+    gt_num_atoms = batch.num_atoms.repeat(num_evals)
+    assert len(gt_num_atoms.shape) == 1
+    gt_atom_types = batch.atom_types.repeat(num_evals)
+    outputs = model.langevin_dynamics(
+        z, ld_kwargs, gt_num_atoms, gt_atom_types)
+    crystals = {k: outputs[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
+    ret_val = [crystals['frac_coords'], crystals['num_atoms'], crystals['atom_types'], crystals['lengths'], crystals['angles']]
     return ret_val
 
 def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=False, symprec=0.01):
@@ -222,7 +220,8 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
     if create_xrd:
         assert len(all_coords) == len(all_xrds)
         all_xrds = torch.stack(all_xrds, dim=0).numpy()
-        assert all_xrds.shape == (len(all_coords), 512)
+        print("all_xrds shape:", all_xrds.shape)
+        assert all_xrds.shape == (len(all_coords), 4096)
 
     return np.array(all_coords), np.array(all_atom_types), all_xrds, crystals_list
 

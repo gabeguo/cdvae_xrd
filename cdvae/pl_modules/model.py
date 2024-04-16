@@ -258,7 +258,7 @@ class CDVAE(BaseModule):
             all_atom_types = []
 
         # obtain key stats.
-        lengths_and_angles, lengths, angles = self.decode_stats(
+        _, lengths, angles = self.decode_stats(
             z, gt_num_atoms)
         if gt_num_atoms is not None:
             # fix to GT num atoms
