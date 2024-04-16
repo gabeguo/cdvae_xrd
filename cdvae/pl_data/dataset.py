@@ -17,6 +17,7 @@ from cdvae.common.data_utils import (
 from pymatgen.analysis.diffraction.xrd import WAVELENGTHS
 
 from tqdm import tqdm
+import random
 
 class CrystDataset(Dataset):
     def __init__(self, name: ValueNode, path: ValueNode,
@@ -30,6 +31,7 @@ class CrystDataset(Dataset):
                  max_2_theta = 180,
                  wavesource='CuKa',
                  vertical_noise=1e-2,
+                 augment_prob=0.3,
                  **kwargs):
         super().__init__()
         self.path = path
@@ -48,6 +50,8 @@ class CrystDataset(Dataset):
         self.wavelength = WAVELENGTHS[wavesource]
         self.nanomaterial_size_min = nanomaterial_size_min_angstrom
         self.nanomaterial_size_max = nanomaterial_size_max_angstrom
+        self.vertical_noise = vertical_noise
+        self.augment_prob = augment_prob
         self.n_presubsample = n_presubsample
         self.n_postsubsample = n_postsubsample
 
@@ -68,8 +72,6 @@ class CrystDataset(Dataset):
         else:
             raise ValueError("Other filters are deprecated. Use sinc filter instead.")
 
-        self.vertical_noise = vertical_noise
-
         self.cached_data = preprocess(
             self.path,
             preprocess_workers,
@@ -77,6 +79,9 @@ class CrystDataset(Dataset):
             primitive=self.primitive,
             graph_method=self.graph_method,
             prop_list=[prop])
+        for the_data_dict in tqdm(self.cached_data):
+            raw_xrd = the_data_dict[self.prop]
+            the_data_dict['plain_xrd'] = torch.tensor(self.sample(raw_xrd.numpy()))
 
         add_scaled_lattice_prop(self.cached_data, lattice_scale_method)
         self.lattice_scaler = None
@@ -97,19 +102,23 @@ class CrystDataset(Dataset):
         (frac_coords, atom_types, lengths, angles, edge_indices,
          to_jimages, num_atoms) = data_dict['graph_arrays']
         
+        plain_xrd = data_dict['plain_xrd']
+        plain_xrd = plain_xrd.view(self.n_postsubsample, -1)
+        assert plain_xrd.shape == (512, 1)
+        
         assert raw_xrd.shape == (self.n_presubsample,)
-        augmented_xrd, curr_nanomaterial_size = self.augment_xrdStrip(raw_xrd)
-        assert augmented_xrd.shape == (self.n_postsubsample,)
+        if random.random() < self.augment_prob:
+            augmented_xrd, curr_nanomaterial_size = self.augment_xrdStrip(raw_xrd)
+            assert augmented_xrd.shape == (self.n_postsubsample,)
+        else:
+            augmented_xrd = plain_xrd
+            curr_nanomaterial_size = 1e5
 
         if "xrd" in data_dict.keys():
             assert self.n_postsubsample == 512
             dim = 512
             augmented_xrd = augmented_xrd.view(dim, -1)
             assert augmented_xrd.shape == (512, 1)
-
-            plain_xrd = self.sample(raw_xrd.numpy())
-            plain_xrd = torch.tensor(plain_xrd).view(dim, -1)
-            assert plain_xrd.shape == (512, 1)
         else:
             raise ValueError('should have xrd')
             dim = 1
