@@ -733,8 +733,7 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     # best of candidate xrd errors
     best_xrd_mse = np.mean([np.min(list) for list in all_xrd_l2_errors])
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
-    best_pdf_correlation = np.min(all_pdf_correlations, axis=1)
-    assert best_pdf_correlation.shape == best_xrd_mse.shape == best_xrd_l1.shape
+    best_pdf_correlation = np.mean(np.min(all_pdf_correlations, axis=1))
 
     ret_val = {
         COUNT: int(num_materials_in_spacegroup),
