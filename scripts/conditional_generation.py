@@ -420,6 +420,7 @@ def process_candidates(args, xrd_args, j,
                                                         Qs=Qs,
                                                         save_dir=opt_pdf_folder_cand)
         candidate_pdf_correlations.append(pdf_correlation)
+        print(f"pdf correlation: {pdf_correlation}")
     # Log the crystal with lowest RMS dist
     all_bestPred_crystals.append(best_crystal)
 
@@ -690,7 +691,7 @@ def optimization(args, model, ld_kwargs, data_loader):
     metrics_folder = os.path.join(base_output_dir, 'metrics')
     os.makedirs(metrics_folder, exist_ok=True)
     with open(f'{metrics_folder}/aggregate_metrics.json', 'w') as fout:
-        json.dump(ret_val, fout, indent=4, sort_keys=True)
+        json.dump(ret_val, fout, indent=4)
     
     print(json.dumps(ret_val, indent=4))
 
@@ -733,7 +734,7 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     # best of candidate xrd errors
     best_xrd_mse = np.mean([np.min(list) for list in all_xrd_l2_errors])
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
-    best_pdf_correlation = np.mean(np.min(all_pdf_correlations, axis=1))
+    best_pdf_correlation = np.mean(np.max(all_pdf_correlations, axis=1))
 
     ret_val = {
         COUNT: int(num_materials_in_spacegroup),
