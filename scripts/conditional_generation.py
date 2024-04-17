@@ -141,7 +141,7 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, Qs, savepath)
 def point_pdf_query(Qs, signal, r):
     ret_val = 0
     assert np.isclose(np.mean(signal), 1)
-    delta_Q = (Qs[-1] - Qs[0]) / Qs.shape[0]
+    delta_Q = (Qs[-1] - Qs[0]) / (Qs.shape[0] - 1)
     assert np.isclose(delta_Q, Qs[1] - Qs[0])
     for i in range(len(signal)):
         q = Qs[i]
@@ -170,13 +170,15 @@ def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
     plt.xlabel(r'$Q (\mathring A^{-1})$')
     plt.ylabel("Scaled Intensity")
     plt.title('XRD patterns')
+    plt.grid()
+    plt.legend()
     plt.savefig(os.path.join(save_dir, 'xrd_comparison.png'))
     plt.savefig(os.path.join(save_dir, 'xrd_comparison.pdf'))
     plt.close()
     # create PDF
     gt_rs, gt_pdf = overall_pdf(Qs=Qs, signal=gt_xrd, r_min=args.r_min, r_max=args.r_max)
     pred_rs, pred_pdf = overall_pdf(Qs=Qs, signal=pred_xrd, r_min=args.r_min, r_max=args.r_max)
-    assert np.isclose(gt_rs, pred_rs)
+    assert np.array_equal(gt_rs, pred_rs)
     # plot PDF
     plt.plot(gt_rs, gt_pdf, label='GT PDF')
     plt.plot(pred_rs, pred_pdf, label='Pred PDF')
@@ -192,6 +194,8 @@ def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
     assert np.isclose(correlation_matrix[0, 0], 1) and np.isclose(correlation_matrix[1, 1], 1)
     # save PDF image
     plt.title(f"Pair Distribution Function Comparison\n(Pearson's r = {pearson_r:.3f})")
+    plt.grid()
+    plt.legend()
     plt.savefig(os.path.join(save_dir, 'pdf_comparison.png'))
     plt.savefig(os.path.join(save_dir, 'pdf_comparison.pdf'))
     # return
