@@ -1,6 +1,6 @@
 python -W ignore conditional_generation.py \
     --model_path /home/gabeguo/hydra/singlerun/2024-04-07/mp_20_sincSmooth10 \
-    --num_starting_points 200 \
+    --num_starting_points 100 \
     --num_candidates 5 \
     --lr 0.1 \
     --min_lr 1e-4 \
@@ -12,4 +12,4 @@ python -W ignore conditional_generation.py \
     --n_step_each 100 \
     --composition_lambda 0.1 \
     --l1_loss \
-    --output_dir paper_results
+    --output_dir paper_results_PRELIM
