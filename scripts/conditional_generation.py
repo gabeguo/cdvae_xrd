@@ -200,6 +200,7 @@ def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
     plt.legend()
     plt.savefig(os.path.join(save_dir, 'pdf_comparison.png'))
     plt.savefig(os.path.join(save_dir, 'pdf_comparison.pdf'))
+    plt.close()
     # return
     return pearson_r
 
@@ -451,6 +452,23 @@ def process_candidates(args, xrd_args, j,
     wandb.finish() 
     return
 
+def write_pdf_histogram(pdf_rs, save_folder, title):
+    plt.hist(pdf_rs, density=True, cumulative=True, bins=np.linspace(0, 1, 21))
+    plt.grid()
+    plt.xticks(np.linspace(0, 1, 11))
+    plt.yticks(np.linspace(0, 1, 11))
+    plt.xlabel("Pearson's Correlation (r) between Predicted and GT PDFs")
+    plt.ylabel("Cumulative Density\n(% of Materials at or below r)")
+    plt.title(title)
+    plt.tight_layout()
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.savefig(os.path.join(save_folder, f'{title}.png'))
+    plt.savefig(os.path.join(save_folder, f'{title}.pdf'))
+    plt.close()
+
+    return
+
 def create_xrd_args(args):
     alt_args = SimpleNamespace()
     alt_args.wave_source = 'CuKa'
@@ -695,6 +713,9 @@ def optimization(args, model, ld_kwargs, data_loader):
     with open(f'{metrics_folder}/aggregate_metrics.json', 'w') as fout:
         json.dump(ret_val, fout, indent=4)
     
+    write_pdf_histogram(pdf_rs=np.array(all_pdf_correlations).flatten(), save_folder=metrics_folder, title='All Predicted PDFs vs. Ground Truth')
+    write_pdf_histogram(pdf_rs=np.max(np.array(all_pdf_correlations), axis=1), save_folder=metrics_folder, title='Best PDFs (per Material) vs. Ground Truth')
+
     print(json.dumps(ret_val, indent=4))
 
     return ret_val
