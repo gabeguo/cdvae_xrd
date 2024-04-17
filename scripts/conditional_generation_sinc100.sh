@@ -12,4 +12,6 @@ python -W ignore conditional_generation.py \
     --n_step_each 100 \
     --composition_lambda 0.1 \
     --l1_loss \
+    --r_min 0 \
+    --r_max 30 \
     --output_dir paper_results_PRELIM

@@ -40,6 +40,8 @@ BEST_XRD_MSE = 'Average best scaled XRD mean squared error among candidates'
 BEST_XRD_L1 = 'Average best scaled XRD mean absolute error among candidates'
 AVG_PDF_CORRELATION = "Average Pearson's correlation coefficient between PDFs"
 BEST_PDF_CORRELATION = "Mean best Pearson's correlation coefficient between PDFs"
+STD_PDF_CORRELATION = "Std of Pearson's correlation coefficieint between PDFs"
+STD_BEST_PDF_CORRELATION = "Std of best Pearson's correlation coefficient between PDFs"
 
 MATCH_RATE = 'match_rate'
 RMS_DIST = 'rms_dist'
@@ -730,11 +732,13 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     avg_xrd_mse = np.mean(all_xrd_l2_errors)
     avg_xrd_l1 = np.mean(all_xrd_l1_errors)
     avg_pdf_correlation = np.mean(all_pdf_correlations)
+    std_pdf_correlation = np.std(all_pdf_correlations)
 
     # best of candidate xrd errors
     best_xrd_mse = np.mean([np.min(list) for list in all_xrd_l2_errors])
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
     best_pdf_correlation = np.mean(np.max(all_pdf_correlations, axis=1))
+    std_best_pdf_correlation = np.std(np.max(all_pdf_correlations, axis=1))
 
     ret_val = {
         COUNT: int(num_materials_in_spacegroup),
@@ -744,7 +748,9 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
         BEST_XRD_MSE: best_xrd_mse,
         BEST_XRD_L1: best_xrd_l1,
         AVG_PDF_CORRELATION: avg_pdf_correlation,
-        BEST_PDF_CORRELATION: best_pdf_correlation
+        BEST_PDF_CORRELATION: best_pdf_correlation,
+        STD_PDF_CORRELATION: std_pdf_correlation,
+        STD_BEST_PDF_CORRELATION: std_best_pdf_correlation
     }
 
     ret_val.update(check_structure_match(gt_structures=all_gt_crystals, 
@@ -850,7 +856,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', default='materials_viz', type=str)
     parser.add_argument('--first_idx', default=0, type=int)
     parser.add_argument('--r_min', default=0, type=float)
-    parser.add_argument('--r_max', default=25, type=float)
+    parser.add_argument('--r_max', default=30, type=float)
     args = parser.parse_args()
 
     print('starting eval', args)
