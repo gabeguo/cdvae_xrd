@@ -165,8 +165,8 @@ def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
     if isinstance(pred_xrd, torch.Tensor):
         pred_xrd = pred_xrd.squeeze().detach().cpu().numpy()
     assert gt_xrd.shape == pred_xrd.shape
-    plt.plot(Qs, gt_xrd, label='GT XRD (noiseless)')
-    plt.plot(Qs, pred_xrd, label='Pred XRD (noiseless)')
+    plt.plot(Qs, gt_xrd, alpha=0.8, label='GT XRD (noiseless)')
+    plt.plot(Qs, pred_xrd, alpha=0.8, label='Pred XRD (noiseless)')
     plt.xlabel(r'$Q (\mathring A^{-1})$')
     plt.ylabel("Scaled Intensity")
     plt.title('XRD patterns')
@@ -180,8 +180,8 @@ def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
     pred_rs, pred_pdf = overall_pdf(Qs=Qs, signal=pred_xrd, r_min=args.r_min, r_max=args.r_max)
     assert np.array_equal(gt_rs, pred_rs)
     # plot PDF
-    plt.plot(gt_rs, gt_pdf, label='GT PDF')
-    plt.plot(pred_rs, pred_pdf, label='Pred PDF')
+    plt.plot(gt_rs, gt_pdf, alpha=0.8, label='GT PDF')
+    plt.plot(pred_rs, pred_pdf, alpha=0.8, label='Pred PDF')
     plt.xlabel(r'$r (\mathring A)$')
     plt.ylabel("G(r)")
     # save PDF torch
