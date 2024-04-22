@@ -53,7 +53,7 @@ def gen_xrd(args):
         for cif in tqdm(cifs, desc=f'Generating XRDs for file {file}'):
             # Create the structure
 
-            parser = CifParser.from_string(cif)
+            parser = CifParser.from_str(cif)
             structure = parser.get_structures()[0]
 
             # crystal = Structure.from_str(cif, fmt='cif')
