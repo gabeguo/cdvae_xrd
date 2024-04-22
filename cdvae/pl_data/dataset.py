@@ -30,6 +30,7 @@ class CrystDataset(Dataset):
                  wavesource='CuKa',
                  horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
                  vertical_noise=1e-3,
+                 pdf=False,
                  **kwargs):
         super().__init__()
         self.path = path
@@ -41,6 +42,7 @@ class CrystDataset(Dataset):
         self.graph_method = graph_method
         self.lattice_scale_method = lattice_scale_method
         self.xrd_filter = xrd_filter
+        self.pdf = pdf
         assert self.xrd_filter in ['gaussian', 'sinc', 'both'], "invalid filter requested"
 
         self.wavelength = WAVELENGTHS[wavesource]
@@ -88,11 +90,38 @@ class CrystDataset(Dataset):
             curr_xrd = curr_xrd.reshape((self.n_presubsample,))
             curr_data_dict['rawXRD'] = self.sample(curr_xrd.numpy()) # need to downsample first
             # have sinc with gaussian filter & sinc w/out gaussian filter
-            curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
-            curr_data_dict[self.prop] = curr_xrd
-            curr_data_dict['sincOnly'] = sinc_only_xrd
-            curr_data_dict['sincOnlyPresubsample'] = sinc_only_xrd_presubsample
-            curr_data_dict['xrdPresubsample'] = curr_xrd_presubsample
+            if self.pdf:
+                sample_interval = self.n_presubsample // self.n_postsubsample
+                Qs_sampled = torch.tensor(self.Qs[::sample_interval])
+                curr_xrd = self.augment_xrdStrip(curr_xrd, return_both=False)
+                rs, the_pdf = self.overall_pdf(Qs=Qs_sampled, signal=curr_xrd, num_samples=self.n_postsubsample)
+                curr_data_dict[self.prop] = the_pdf
+                curr_data_dict['sincOnly'] = the_pdf
+                curr_data_dict['sincOnlyPresubsample'] = the_pdf
+                curr_data_dict['xrdPresubsample'] = the_pdf
+            else:
+                curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
+                curr_data_dict[self.prop] = curr_xrd
+                curr_data_dict['sincOnly'] = sinc_only_xrd
+                curr_data_dict['sincOnlyPresubsample'] = sinc_only_xrd_presubsample
+                curr_data_dict['xrdPresubsample'] = curr_xrd_presubsample
+
+    def overall_pdf(self, Qs, signal, r_min=0, r_max=30, num_samples=512):
+        assert Qs.shape == signal.shape
+        signal = signal / torch.mean(signal)
+        rs = torch.linspace(r_min, r_max, num_samples)
+        rs_orig = rs
+        the_pdf = list()
+        assert torch.isclose(torch.mean(signal), torch.tensor(1.0).to(dtype=signal.dtype))
+        delta_Q = torch.tensor((Qs[-1] - Qs[0]) / (Qs.shape[0] - 1), dtype=signal.dtype)
+        assert torch.isclose(delta_Q, torch.tensor(Qs[1] - Qs[0], dtype=signal.dtype))
+        Qs = Qs.reshape(-1, 1).expand(-1, num_samples)
+        signal = signal.reshape(-1, 1).expand(-1, num_samples)
+        rs = rs.reshape(1, -1).expand(Qs.shape[0], -1)
+        assert Qs.shape == signal.shape == rs.shape
+        the_pdf = torch.sum(2 / np.pi * Qs * (signal - 1) * torch.sin(Qs * rs) * delta_Q, 0)
+        assert the_pdf.shape == (num_samples,)
+        return rs_orig, the_pdf
 
     def sample(self, x):
         step_size = int(np.ceil(len(x) / self.n_postsubsample))
