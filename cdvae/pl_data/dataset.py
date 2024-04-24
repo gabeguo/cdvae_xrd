@@ -156,7 +156,9 @@ class CrystDataset(Dataset):
             raw_sinc_presubsample = data_dict['sincOnlyPresubsample']
             xrd_presubsample = data_dict['xrdPresubsample']
         else:
-            raw_sinc = None
+            raw_sinc = data_dict['sincOnly'].view(self.n_postsubsample, 1)
+            raw_sinc_presubsample = None
+            xrd_presubsample = None
 
         # atom_coords are fractional coordinates
         # edge_index is incremented during batching
