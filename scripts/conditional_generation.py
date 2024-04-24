@@ -471,7 +471,7 @@ def write_pdf_histogram(pdf_rs, save_folder, title):
 
 def create_xrd_args(args):
     alt_args = SimpleNamespace()
-    alt_args.wave_source = 'CuKa'
+    alt_args.wave_source = args.wave_source
     alt_args.num_materials = args.num_starting_points
     alt_args.xrd_vector_dim = 4096
     alt_args.max_theta = 180
@@ -878,6 +878,7 @@ if __name__ == '__main__':
     parser.add_argument('--first_idx', default=0, type=int)
     parser.add_argument('--r_min', default=0, type=float)
     parser.add_argument('--r_max', default=30, type=float)
+    parser.add_argument('--wave_source', default='CuKa', type=str)
     args = parser.parse_args()
 
     print('starting eval', args)
