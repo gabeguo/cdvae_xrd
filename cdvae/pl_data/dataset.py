@@ -30,7 +30,7 @@ class CrystDataset(Dataset):
                  wavesource='CuKa',
                  horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
                  vertical_noise=1e-3,
-                 pdf=False,
+                 pdf=False, normalized_pdf=False,
                  **kwargs):
         super().__init__()
         self.path = path
@@ -43,6 +43,7 @@ class CrystDataset(Dataset):
         self.lattice_scale_method = lattice_scale_method
         self.xrd_filter = xrd_filter
         self.pdf = pdf
+        self.normalized_pdf = normalized_pdf
         assert self.xrd_filter in ['gaussian', 'sinc', 'both'], "invalid filter requested"
 
         self.wavelength = WAVELENGTHS[wavesource]
@@ -121,6 +122,8 @@ class CrystDataset(Dataset):
         assert Qs.shape == signal.shape == rs.shape
         the_pdf = torch.sum(2 / np.pi * Qs * (signal - 1) * torch.sin(Qs * rs) * delta_Q, 0)
         assert the_pdf.shape == (num_samples,)
+        if self.normalized_pdf:
+            the_pdf /= torch.max(torch.abs(the_pdf))
         return rs_orig, the_pdf
 
     def sample(self, x):
