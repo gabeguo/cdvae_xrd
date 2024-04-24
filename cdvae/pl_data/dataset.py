@@ -93,8 +93,8 @@ class CrystDataset(Dataset):
             if self.pdf:
                 sample_interval = self.n_presubsample // self.n_postsubsample
                 Qs_sampled = torch.tensor(self.Qs[::sample_interval])
-                curr_xrd = self.augment_xrdStrip(curr_xrd, return_both=False)
-                rs, the_pdf = self.overall_pdf(Qs=Qs_sampled, signal=curr_xrd, num_samples=self.n_postsubsample)
+                _, sinc_only_postsubsample, _, _ = self.augment_xrdStrip(curr_xrd, return_both=True) # take sinc filtered xrd
+                rs, the_pdf = self.overall_pdf(Qs=Qs_sampled, signal=sinc_only_postsubsample, num_samples=self.n_postsubsample)
                 curr_data_dict[self.prop] = the_pdf
                 curr_data_dict['sincOnly'] = curr_xrd
                 curr_data_dict['sincOnlyPresubsample'] = curr_xrd
