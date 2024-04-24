@@ -96,9 +96,9 @@ class CrystDataset(Dataset):
                 curr_xrd = self.augment_xrdStrip(curr_xrd, return_both=False)
                 rs, the_pdf = self.overall_pdf(Qs=Qs_sampled, signal=curr_xrd, num_samples=self.n_postsubsample)
                 curr_data_dict[self.prop] = the_pdf
-                curr_data_dict['sincOnly'] = the_pdf
-                curr_data_dict['sincOnlyPresubsample'] = the_pdf
-                curr_data_dict['xrdPresubsample'] = the_pdf
+                curr_data_dict['sincOnly'] = curr_xrd
+                curr_data_dict['sincOnlyPresubsample'] = curr_xrd
+                curr_data_dict['xrdPresubsample'] = curr_xrd
             else:
                 curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
                 curr_data_dict[self.prop] = curr_xrd
@@ -207,13 +207,17 @@ class CrystDataset(Dataset):
             returns (bothFiltered, rawSincFiltered); where bothFiltered has both sinc filter & gaussian filter,
             rawSincFiltered has only sinc filter
         """
+        if self.pdf:
+            assert self.xrd_filter == 'sinc'
         xrd = curr_xrdStrip.numpy()
         assert xrd.shape == (self.n_presubsample,)
         # Peak broadening
         if self.xrd_filter == 'both':
             sinc_filtered = self.sinc_filter(xrd)
             filtered = self.gaussian_filter(sinc_filtered)
+            sinc_only_presubsample = torch.from_numpy(sinc_filtered)
             assert filtered.shape == xrd.shape
+            assert not self.pdf
         elif self.xrd_filter == 'sinc':
             filtered = self.sinc_filter(xrd)
             assert filtered.shape == xrd.shape
@@ -227,12 +231,12 @@ class CrystDataset(Dataset):
 
         # presubsamples
         filtered_presubsample = torch.from_numpy(filtered)
-        sinc_only_presubsample = torch.from_numpy(sinc_filtered)
 
         # postsubsampling
         filtered_postsubsampled = self.post_process_filtered_xrd(filtered)
 
         if return_both: # want to return double filtered & sinc-only filtered
+            assert not self.pdf
             assert self.xrd_filter == 'both'
             assert sinc_filtered.shape == curr_xrdStrip.shape
             # postsubsampling
