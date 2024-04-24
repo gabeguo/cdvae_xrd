@@ -97,8 +97,8 @@ class CrystDataset(Dataset):
                 sinc_only_postsubsample = self.augment_xrdStrip(curr_xrd, return_both=False) # take sinc filtered xrd
                 rs, the_pdf = self.overall_pdf(Qs=Qs_sampled, signal=sinc_only_postsubsample, num_samples=self.n_postsubsample)
                 curr_data_dict[self.prop] = the_pdf
-                curr_data_dict['sincOnly'] = curr_xrd
-                curr_data_dict['sincOnlyPresubsample'] = curr_xrd
+                curr_data_dict['sincOnly'] = sinc_only_postsubsample
+                curr_data_dict['sincOnlyPresubsample'] = None
                 curr_data_dict['xrdPresubsample'] = curr_xrd
             else:
                 curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
