@@ -170,6 +170,10 @@ def calc_r_factor(gt_xrd, pred_xrd, Qs):
     delta_Q = (Qs[-1] - Qs[0]) / (Qs.shape[0] - 1)
     assert np.isclose(delta_Q, Qs[1] - Qs[0])
     assert np.isclose(delta_Q, Qs[-1] - Qs[-2])
+    if isinstance(gt_xrd, torch.Tensor):
+        gt_xrd = gt_xrd.squeeze().detach().cpu().numpy()
+    if isinstance(pred_xrd, torch.Tensor):
+        pred_xrd = pred_xrd.squeeze().detach().cpu().numpy()
     assert np.isclose(np.max(gt_xrd), 1)
     assert np.isclose(np.max(pred_xrd), 1)
     assert np.min(gt_xrd) >= 0
