@@ -42,6 +42,12 @@ AVG_PDF_CORRELATION = "Average Pearson's correlation coefficient between PDFs"
 BEST_PDF_CORRELATION = "Mean best Pearson's correlation coefficient between PDFs"
 STD_PDF_CORRELATION = "Std of Pearson's correlation coefficieint between PDFs"
 STD_BEST_PDF_CORRELATION = "Std of best Pearson's correlation coefficient between PDFs"
+PDF_CORRELATIONS = "All PDF correlations"
+AVG_R_FACTOR = 'Average r factor'
+BEST_R_FACTOR = 'Best r factor'
+STD_R_FACTOR = 'Std of r factors'
+STD_BEST_R_FACTOR = 'Std of best r factors'
+R_FACTORS = "All r factors"
 
 MATCH_RATE = 'match_rate'
 RMS_DIST = 'rms_dist'
@@ -159,6 +165,18 @@ def overall_pdf(Qs, signal, r_min=0, r_max=25, num_samples=1000):
     for r in rs:
         the_pdf.append(point_pdf_query(Qs=Qs, signal=signal, r=r))
     return np.array(rs), np.array(the_pdf)
+
+def calc_r_factor(gt_xrd, pred_xrd, Qs):
+    delta_Q = (Qs[-1] - Qs[0]) / (Qs.shape[0] - 1)
+    assert np.isclose(delta_Q, Qs[1] - Qs[0])
+    assert np.isclose(delta_Q, Qs[-1] - Qs[-2])
+    assert np.isclose(np.max(gt_xrd), 1)
+    assert np.isclose(np.max(pred_xrd), 1)
+    assert np.min(gt_xrd) >= 0
+    assert np.min(pred_xrd) >= 0
+    numerator = torch.sum((gt_xrd - pred_xrd)**2 * delta_Q)
+    denominator = torch.sum(gt_xrd**2 * delta_Q)
+    return numerator / denominator
 
 def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
     # plot XRD
@@ -321,7 +339,7 @@ def process_candidates(args, xrd_args, j,
         curr_gt_crystal, gt_atom_types,
         gt_material_filepath, gt_xrd_filepath,
         all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms,
-        all_pdf_correlations, Qs):
+        all_pdf_correlations, all_r_factors, Qs):
 
     candidate_xrd_l1_errors = list()
     candidate_xrd_l2_errors = list()
@@ -329,6 +347,7 @@ def process_candidates(args, xrd_args, j,
     candidate_composition_errors = list()
     candidate_has_correct_num_atoms = list()
     candidate_pdf_correlations = list()
+    candidate_r_factors = list()
 
     print(f'crystal {j} has {len(min_loss_indices)} candidates')
     best_rms_dist = 1e6
@@ -424,6 +443,9 @@ def process_candidates(args, xrd_args, j,
                                                         save_dir=opt_pdf_folder_cand)
         candidate_pdf_correlations.append(pdf_correlation)
         print(f"pdf correlation: {pdf_correlation}")
+        r_factor = calc_r_factor(gt_xrd=gt_noiseless_xrd, pred_xrd=noiseless_generated_xrds[min_loss_idx], Qs=Qs)
+        candidate_r_factors.append(r_factor)
+        print(f"r factor: {r_factor}")
     # Log the crystal with lowest RMS dist
     all_bestPred_crystals.append(best_crystal)
 
@@ -434,7 +456,11 @@ def process_candidates(args, xrd_args, j,
         BEST_XRD_L1: np.min(candidate_xrd_l1_errors),
         MATCH_RATE: candidate_match_status,
         AVG_PDF_CORRELATION: np.mean(candidate_pdf_correlations),
-        BEST_PDF_CORRELATION: np.max(candidate_pdf_correlations)
+        BEST_PDF_CORRELATION: np.max(candidate_pdf_correlations),
+        AVG_R_FACTOR: np.mean(candidate_r_factors),
+        BEST_R_FACTOR: np.max(candidate_r_factors),
+        PDF_CORRELATIONS: candidate_pdf_correlations,
+        R_FACTORS: candidate_r_factors
     }
 
     metrics_folder = os.path.join(curr_material_folder, 'metrics')
@@ -448,17 +474,18 @@ def process_candidates(args, xrd_args, j,
     all_composition_errors.append(candidate_composition_errors)
     has_correct_num_atoms.append(candidate_has_correct_num_atoms)
     all_pdf_correlations.append(candidate_pdf_correlations)
+    all_r_factors.append(candidate_r_factors)
 
     wandb.finish() 
     return
 
-def write_pdf_histogram(pdf_rs, save_folder, title):
-    plt.hist(pdf_rs, density=True, cumulative=True, bins=np.linspace(0, 1, 21))
+def write_histogram(values, save_folder, title, xlabel, ylabel):
+    plt.hist(values, density=True, cumulative=True, bins=np.linspace(0, 1, 21))
     plt.grid()
     plt.xticks(np.linspace(0, 1, 11))
     plt.yticks(np.linspace(0, 1, 11))
-    plt.xlabel("Pearson's Correlation (r) between Predicted and GT PDFs")
-    plt.ylabel("Cumulative Density\n(% of Materials at or below r)")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     plt.title(title)
     plt.tight_layout()
     plt.xlim(0, 1)
@@ -467,6 +494,18 @@ def write_pdf_histogram(pdf_rs, save_folder, title):
     plt.savefig(os.path.join(save_folder, f'{title}.pdf'))
     plt.close()
 
+    return
+
+def write_pdf_histogram(pdf_rs, save_folder, title):
+    xlabel = "Pearson's Correlation (r) between Predicted and GT PDFs"
+    ylabel = "Cumulative Density\n(% of Materials at or below r)"
+    write_histogram(values=pdf_rs, save_folder=save_folder, title=title, xlabel=xlabel, ylabel=ylabel)
+    return
+
+def write_r_factor_histogram(r_factors, save_folder, title):
+    xlabel = "R-Factor (Residuals Function) between\nPredicted and GT XRDs (Noiseless)"
+    ylabel = "Cumulative Density\n(% of Materials at or below R)"
+    write_histogram(values=r_factors, save_folder=save_folder, title=title, xlabel=xlabel, ylabel=ylabel)
     return
 
 def create_xrd_args(args):
@@ -570,6 +609,7 @@ def optimization(args, model, ld_kwargs, data_loader):
     all_xrd_l2_errors = list()
     has_correct_num_atoms = list()
     all_pdf_correlations = list()
+    all_r_factors = list()
 
     spacegroups = list()
     formula_strs = list()
@@ -696,7 +736,7 @@ def optimization(args, model, ld_kwargs, data_loader):
                 gt_material_filepath=gt_material_filepath, gt_xrd_filepath=gt_xrd_filepath,
                 all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
                 all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms,
-                all_pdf_correlations=all_pdf_correlations,
+                all_pdf_correlations=all_pdf_correlations, all_r_factors=all_r_factors,
                 Qs=downsampled_Qs)
 
     ret_val = dict()
@@ -704,7 +744,7 @@ def optimization(args, model, ld_kwargs, data_loader):
         curr_results = calculate_metrics(all_gt_crystals=all_gt_crystals, all_bestPred_crystals=all_bestPred_crystals,
             all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
             all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms,
-            all_pdf_correlations=all_pdf_correlations,
+            all_pdf_correlations=all_pdf_correlations, all_r_factors=all_r_factors,
             spacegroups=spacegroups, desired_spacegroup=curr_spacegroup)
         ret_val[curr_spacegroup] = curr_results
 
@@ -716,13 +756,16 @@ def optimization(args, model, ld_kwargs, data_loader):
     write_pdf_histogram(pdf_rs=np.array(all_pdf_correlations).flatten(), save_folder=metrics_folder, title='All Predicted PDFs vs. Ground Truth')
     write_pdf_histogram(pdf_rs=np.max(np.array(all_pdf_correlations), axis=1), save_folder=metrics_folder, title='Best PDFs (per Material) vs. Ground Truth')
 
+    write_r_factor_histogram(r_factors=np.array(all_r_factors).flatten(), save_folder=metrics_folder, title='All Predicted R-Factors vs. Ground Truth')
+    write_r_factor_histogram(r_factors=np.max(np.array(all_r_factors), axis=1), save_folder=metrics_folder, title='Best R-Factors (per Material) vs. Ground Truth')
+
     print(json.dumps(ret_val, indent=4))
 
     return ret_val
 
 def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
             all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms,
-            all_pdf_correlations, spacegroups, desired_spacegroup):
+            all_pdf_correlations, all_r_factors, spacegroups, desired_spacegroup):
     # turn into numpy arrays
     spacegroups = np.array(spacegroups)
     all_gt_crystals = np.array(all_gt_crystals)
@@ -732,6 +775,7 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     all_composition_errors = np.array(all_composition_errors)
     has_correct_num_atoms = np.array(has_correct_num_atoms)
     all_pdf_correlations = np.array(all_pdf_correlations)
+    all_r_factors = np.array(all_r_factors)
 
     num_materials_in_spacegroup = len(spacegroups)
     if desired_spacegroup != USE_ALL_SPACEGROUPS:
@@ -746,6 +790,7 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
         all_composition_errors = all_composition_errors[index_mask]
         has_correct_num_atoms = has_correct_num_atoms[index_mask]
         all_pdf_correlations = all_pdf_correlations[index_mask]
+        all_r_factors = all_r_factors[index_mask]
 
         num_materials_in_spacegroup = np.sum(index_mask)
 
@@ -754,12 +799,16 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     avg_xrd_l1 = np.mean(all_xrd_l1_errors)
     avg_pdf_correlation = np.mean(all_pdf_correlations)
     std_pdf_correlation = np.std(all_pdf_correlations)
+    avg_r_factor = np.mean(all_r_factors)
+    std_r_factor = np.std(all_r_factors)
 
     # best of candidate xrd errors
     best_xrd_mse = np.mean([np.min(list) for list in all_xrd_l2_errors])
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
     best_pdf_correlation = np.mean(np.max(all_pdf_correlations, axis=1))
     std_best_pdf_correlation = np.std(np.max(all_pdf_correlations, axis=1))
+    best_r_factor = np.mean(np.max(all_r_factors, axis=1))
+    std_best_r_factor = np.std(np.max(all_r_factors, axis=1))
 
     ret_val = {
         COUNT: int(num_materials_in_spacegroup),
@@ -771,7 +820,11 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
         AVG_PDF_CORRELATION: avg_pdf_correlation,
         BEST_PDF_CORRELATION: best_pdf_correlation,
         STD_PDF_CORRELATION: std_pdf_correlation,
-        STD_BEST_PDF_CORRELATION: std_best_pdf_correlation
+        STD_BEST_PDF_CORRELATION: std_best_pdf_correlation,
+        AVG_R_FACTOR: avg_r_factor,
+        STD_R_FACTOR: std_r_factor,
+        BEST_R_FACTOR: best_r_factor,
+        STD_BEST_R_FACTOR: std_best_r_factor
     }
 
     ret_val.update(check_structure_match(gt_structures=all_gt_crystals, 
