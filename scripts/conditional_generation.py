@@ -178,8 +178,8 @@ def calc_r_factor(gt_xrd, pred_xrd, Qs):
     assert np.isclose(np.max(pred_xrd), 1)
     assert np.min(gt_xrd) >= 0
     assert np.min(pred_xrd) >= 0
-    numerator = torch.sum((gt_xrd - pred_xrd)**2 * delta_Q)
-    denominator = torch.sum(gt_xrd**2 * delta_Q)
+    numerator = np.sum((gt_xrd - pred_xrd)**2 * delta_Q)
+    denominator = np.sum(gt_xrd**2 * delta_Q)
     return numerator / denominator
 
 def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
@@ -483,17 +483,18 @@ def process_candidates(args, xrd_args, j,
     wandb.finish() 
     return
 
-def write_histogram(values, save_folder, title, xlabel, ylabel):
+def write_histogram(values, save_folder, title, xlabel, ylabel, standard_range=True):
     plt.hist(values, density=True, cumulative=True, bins=np.linspace(0, 1, 21))
     plt.grid()
-    plt.xticks(np.linspace(0, 1, 11))
+    if standard_range:
+        plt.xticks(np.linspace(0, 1, 11))
+        plt.xlim(0, 1)  
     plt.yticks(np.linspace(0, 1, 11))
+    plt.ylim(0, 1)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title(title)
     plt.tight_layout()
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
     plt.savefig(os.path.join(save_folder, f'{title}.png'))
     plt.savefig(os.path.join(save_folder, f'{title}.pdf'))
     plt.close()
@@ -509,7 +510,7 @@ def write_pdf_histogram(pdf_rs, save_folder, title):
 def write_r_factor_histogram(r_factors, save_folder, title):
     xlabel = "R-Factor (Residuals Function) between\nPredicted and GT XRDs (Noiseless)"
     ylabel = "Cumulative Density\n(% of Materials at or below R)"
-    write_histogram(values=r_factors, save_folder=save_folder, title=title, xlabel=xlabel, ylabel=ylabel)
+    write_histogram(values=r_factors, save_folder=save_folder, title=title, xlabel=xlabel, ylabel=ylabel, standard_range=False)
     return
 
 def create_xrd_args(args):
