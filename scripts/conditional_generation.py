@@ -178,8 +178,8 @@ def calc_r_factor(gt_xrd, pred_xrd, Qs):
     assert np.isclose(np.max(pred_xrd), 1)
     assert np.min(gt_xrd) >= 0
     assert np.min(pred_xrd) >= 0
-    numerator = np.sum((gt_xrd - pred_xrd)**2 * delta_Q)
-    denominator = np.sum(gt_xrd**2 * delta_Q)
+    numerator = np.sum(delta_Q * (gt_xrd - pred_xrd)**2)
+    denominator = np.sum(delta_Q * gt_xrd**2)
     return numerator / denominator
 
 def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
@@ -595,6 +595,7 @@ def plot_filter(filter, Qs, filter_viz_folder, nanomaterial_size):
     plt.close()
 
 def create_z_from_init(args, batch, model, cif_path):
+    batch = batch.clone() # do not do the overwriting
     assert os.path.exists(cif_path), f'{cif_path} does not exist'
 
     with open(cif_path, 'r') as fin:
@@ -882,8 +883,8 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
     best_pdf_correlation = np.mean(np.max(all_pdf_correlations, axis=1))
     std_best_pdf_correlation = np.std(np.max(all_pdf_correlations, axis=1))
-    best_r_factor = np.mean(np.max(all_r_factors, axis=1))
-    std_best_r_factor = np.std(np.max(all_r_factors, axis=1))
+    best_r_factor = np.mean(np.min(all_r_factors, axis=1))
+    std_best_r_factor = np.std(np.min(all_r_factors, axis=1))
 
     ret_val = {
         COUNT: int(num_materials_in_spacegroup),
