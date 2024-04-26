@@ -883,7 +883,7 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
     best_pdf_correlation = np.mean(np.max(all_pdf_correlations, axis=1))
     std_best_pdf_correlation = np.std(np.max(all_pdf_correlations, axis=1))
-    best_r_factor = np.mean(np.min(all_r_factors, axis=1))
+    best_r_factor = np.mean(np.min(all_r_factors, axis=1)) 
     std_best_r_factor = np.std(np.min(all_r_factors, axis=1))
 
     ret_val = {
