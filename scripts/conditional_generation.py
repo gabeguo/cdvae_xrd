@@ -21,13 +21,13 @@ from torch.distributions import MultivariateNormal
 
 
 from eval_utils import load_model
-from cdvae.common.data_utils import get_scaler_from_data_list
+from cdvae.common.data_utils import get_scaler_from_data_list, build_crystal, build_crystal_graph
 from visualization.visualize_materials import create_materials, plot_material_single, plot_xrd_single
 from compute_metrics import Crystal, RecEval, GenEval
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.io.cif import CifWriter
+from pymatgen.io.cif import CifWriter, CifParser
 
 import wandb
 
@@ -277,13 +277,14 @@ def optimize_latent_code(args, model, batch, target_noisy_xrd, z_init=None):
                            torch.eye(model.hparams.hidden_dim).cuda())
     
     if z_init is None:
+        assert args.start_from_init is None
         print('random z')
         z = torch.randn(args.num_starting_points, model.hparams.hidden_dim,
                     device=model.device)
     else:
-        print('init z from pre-existing')
-        z = z_init.reshape(1, model.hparams.hidden_dim)
-        z = z.repeat(args.num_starting_points, 1)
+        print(f'init z from pre-existing: {args.start_from_init}')
+        z = z_init.detach()
+        assert z.shape == (args.num_starting_points, model.hparams.hidden_dim)
     
     z.requires_grad = True
     opt = Adam([z], lr=args.lr)
@@ -593,6 +594,56 @@ def plot_filter(filter, Qs, filter_viz_folder, nanomaterial_size):
     plt.savefig(f'{filter_viz_folder}/filter_spatial.pdf')
     plt.close()
 
+def create_z_from_init(args, batch, model, cif_path):
+    assert os.path.exists(cif_path), f'{cif_path} does not exist'
+
+    with open(cif_path, 'r') as fin:
+        cif_str = ''.join(fin.readlines())
+        crystal = build_crystal(cif_str)
+        frac_coords, atom_types, lengths, angles, edge_indices, to_jimages, num_atoms = \
+            build_crystal_graph(crystal)
+
+    batch.frac_coords = torch.Tensor(frac_coords).to(device=batch.frac_coords.device)
+    batch.atom_types = torch.LongTensor(atom_types).to(device=batch.atom_types.device)
+    batch.lengths = torch.Tensor(lengths).view(1, -1).to(device=batch.lengths.device)
+    batch.angles = torch.Tensor(angles).view(1, -1).to(device=batch.angles.device)
+    batch.edge_index = torch.LongTensor(edge_indices.T).contiguous().to(device=batch.edge_index.device)
+    batch.to_jimages = torch.LongTensor(to_jimages).to(device=batch.to_jimages.device)
+    batch.num_atoms = torch.tensor([num_atoms]).to(device=batch.num_atoms.device)
+    batch.num_bonds = torch.tensor([edge_indices.shape[0]]).to(device=batch.num_bonds.device)
+
+    mu, log_var, z = model.encode(batch)
+    assert mu.shape == (1, model.hparams.hidden_dim), f"actually, mu's shape is: {mu.shape}"
+    assert log_var.shape == (1, model.hparams.hidden_dim), f"actually, log_var's shape is: {log_var.shape}"
+    assert z.shape == (1, model.hparams.hidden_dim), f"actually, z's shape is: {z.shape}"
+    mu = mu.repeat(args.num_starting_points, 1)
+    log_var = log_var.repeat(args.num_starting_points, 1)
+    z = model.reparameterize(mu, log_var)
+    assert z.shape == (args.num_starting_points, model.hparams.hidden_dim)
+
+    return z
+
+    # data = Data(
+    #     frac_coords=torch.Tensor(frac_coords),
+    #     atom_types=torch.LongTensor(atom_types),
+    #     lengths=torch.Tensor(lengths).view(1, -1),
+    #     angles=torch.Tensor(angles).view(1, -1),
+    #     edge_index=torch.LongTensor(
+    #         edge_indices.T).contiguous(),  # shape (2, num_edges)
+    #     to_jimages=torch.LongTensor(to_jimages),
+    #     num_atoms=num_atoms,
+    #     num_bonds=edge_indices.shape[0],
+    #     spacegroup=data_dict['spacegroup.number'],
+    #     pretty_formula=data_dict['pretty_formula'],
+    #     mpid=data_dict['mp_id'],
+    #     num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
+    #     y=prop,
+    #     raw_sinc=raw_sinc,
+    #     raw_sinc_presubsample=raw_sinc_presubsample,
+    #     xrd_presubsample=xrd_presubsample,
+    #     raw_xrd=torch.tensor(data_dict['rawXRD'])
+    # )
+
 def optimization(args, model, ld_kwargs, data_loader):
     assert data_loader is not None
     
@@ -653,9 +704,15 @@ def optimization(args, model, ld_kwargs, data_loader):
 
         raw_sinc = batch.raw_sinc.reshape(1, 512)
         gt_noiseless_xrd = batch.raw_xrd.reshape(1, 512)
-        # if args.start_from_init:
-        #     z_init = 
-        z = optimize_latent_code(args=args, model=model, batch=batch, target_noisy_xrd=target_noisy_xrd)
+
+        if args.start_from_init:
+            init_material_folder = f'{args.start_from_init}/material{j}_{mpids[-1]}_{formula_strs[-1]}'
+            cif_path = os.path.join(init_material_folder, 'pred', 'candidate0', 'cif', f'noSpacegroup_material{j}_candidate0.cif')
+            z_init = create_z_from_init(args, batch, model, cif_path)
+        else:
+            z_init = None
+        z = optimize_latent_code(args=args, model=model, batch=batch, 
+                                 target_noisy_xrd=target_noisy_xrd, z_init=z_init)
 
         # get predicted xrd for all optimized candidates
         final_pred_xrds = model.fc_property(z).reshape(-1, 512)
@@ -950,6 +1007,7 @@ if __name__ == '__main__':
     parser.add_argument('--r_min', default=0, type=float)
     parser.add_argument('--r_max', default=30, type=float)
     parser.add_argument('--wave_source', default='CuKa', type=str)
+    parser.add_argument('--start_from_init', default=None, type=str)
     args = parser.parse_args()
 
     print('starting eval', args)
