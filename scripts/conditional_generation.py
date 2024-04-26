@@ -272,12 +272,18 @@ def calculate_accuracy(probabilities, labels):
     
     return accuracy.item()  # Convert to Python float for readability
 
-def optimize_latent_code(args, model, batch, target_noisy_xrd):
+def optimize_latent_code(args, model, batch, target_noisy_xrd, z_init=None):
     m = MultivariateNormal(torch.zeros(model.hparams.hidden_dim).cuda(), 
                            torch.eye(model.hparams.hidden_dim).cuda())
     
-    z = torch.randn(args.num_starting_points, model.hparams.hidden_dim,
+    if z_init is None:
+        print('random z')
+        z = torch.randn(args.num_starting_points, model.hparams.hidden_dim,
                     device=model.device)
+    else:
+        print('init z from pre-existing')
+        z = z_init.reshape(1, model.hparams.hidden_dim)
+        z = z.repeat(args.num_starting_points, 1)
     
     z.requires_grad = True
     opt = Adam([z], lr=args.lr)
@@ -484,11 +490,16 @@ def process_candidates(args, xrd_args, j,
     return
 
 def write_histogram(values, save_folder, title, xlabel, ylabel, standard_range=True):
-    plt.hist(values, density=True, cumulative=True, bins=np.linspace(0, 1, 21))
     plt.grid()
     if standard_range:
         plt.xticks(np.linspace(0, 1, 11))
-        plt.xlim(0, 1)  
+        plt.xlim(0, 1)
+        bins = np.linspace(0, 1, 21)
+    else:
+        plt.xticks(np.linspace(int(np.min(values)), int(np.max(values)), 11))
+        plt.xlim(int(np.min(values)), int(np.max(values)))
+        bins = np.linspace(int(np.min(values)), int(np.max(values)), 21)
+    plt.hist(values, density=True, cumulative=True, bins=bins)
     plt.yticks(np.linspace(0, 1, 11))
     plt.ylim(0, 1)
     plt.xlabel(xlabel)
@@ -642,6 +653,8 @@ def optimization(args, model, ld_kwargs, data_loader):
 
         raw_sinc = batch.raw_sinc.reshape(1, 512)
         gt_noiseless_xrd = batch.raw_xrd.reshape(1, 512)
+        # if args.start_from_init:
+        #     z_init = 
         z = optimize_latent_code(args=args, model=model, batch=batch, target_noisy_xrd=target_noisy_xrd)
 
         # get predicted xrd for all optimized candidates
