@@ -6,7 +6,7 @@ python -W ignore conditional_generation.py \
     --min_lr 1e-4 \
     --l2_penalty 2e-4 \
     --num_tested_materials 200 \
-    --label _moka_sinc100_ \
+    --label refine_moka_sinc100_ \
     --num_gradient_steps 1000 \
     --num_atom_lambda 0.1 \
     --n_step_each 100 \
