@@ -330,17 +330,23 @@ def create_data(args, filepath):
         # Calculate the XRD pattern
         pattern = xrd_calc.get_pattern(structure)
         simulated_xrd_tensor = create_xrd_tensor(args, pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
-        plt.plot(desired_Qs, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated')
-        plt.plot(desired_Qs, xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='converted')
+        plt.plot(desired_Qs, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.4, label=f'Theoretical Calculation ({args.desired_wavelength})')
+        plt.plot(desired_Qs, xrd_tensor.detach().cpu().numpy(), alpha=0.8, label='Experimentally Gathered')
 
         # Sanity check spacegroups
         sga = SpacegroupAnalyzer(structure)
         print(sga.get_crystal_system())
         conventional_structure = sga.get_conventional_standard_structure()
 
-        alt_pattern = xrd_calc.get_pattern(conventional_structure)
-        alt_simulated_xrd_tensor = create_xrd_tensor(args, alt_pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
-        plt.plot(desired_Qs, alt_simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated (spacegroup recalc)')
+        # alt_pattern = xrd_calc.get_pattern(conventional_structure)
+        # alt_simulated_xrd_tensor = create_xrd_tensor(args, alt_pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
+        # plt.plot(desired_Qs, alt_simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated (spacegroup recalc)')
+
+        plt.title("Experimental XRD Pattern")
+        plt.xlabel(r'$Q (\mathring A^{-1})$')
+        plt.ylabel("Scaled Intensity")
+
+        plt.grid()
 
         plt.legend()
         vis_filepath = os.path.join(args.output_dir, 'vis')
@@ -437,7 +443,7 @@ if __name__ == "__main__":
     for filepath in tqdm(FILEPATHS):
         try:
             curr_data = create_data(args, filepath)
-            output_df = output_df.append(curr_data, ignore_index=True)
+            output_df = output_df._append(curr_data, ignore_index=True)
         except AttributeError as e:
             print(e)
             print('abort element')
