@@ -9,7 +9,7 @@ python -W ignore conditional_generation.py \
     --label _random_baseline_ \
     --num_gradient_steps 1 \
     --num_atom_lambda 0.1 \
-    --n_step_each 1 \
+    --n_step_each 0 \
     --composition_lambda 0.1 \
     --l1_loss \
     --r_min 0 \
