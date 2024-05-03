@@ -7,10 +7,10 @@ python -W ignore conditional_generation.py \
     --l2_penalty 0 \
     --num_tested_materials 200 \
     --label _random_baseline_ \
-    --num_gradient_steps 0 \
-    --num_atom_lambda 0 \
+    --num_gradient_steps 1 \
+    --num_atom_lambda 0.1 \
     --n_step_each 1 \
-    --composition_lambda 0 \
+    --composition_lambda 0.1 \
     --l1_loss \
     --r_min 0 \
     --r_max 30 \
