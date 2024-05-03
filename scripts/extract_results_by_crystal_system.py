@@ -74,7 +74,7 @@ def main(args):
     experiment_name = args.results_dir.split('/')[-1]
     output_filepath = os.path.join(args.output_dir, f"{experiment_name}.json")
     with open(output_filepath, 'w') as fout:
-        json.dump(aggregate_results, fout, indent=4)
+        json.dump(aggregate_results, fout, indent=4, sort_keys=True)
 
     return
 
