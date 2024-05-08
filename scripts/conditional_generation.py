@@ -743,33 +743,6 @@ def optimization(args, model, ld_kwargs, data_loader):
         all_opt_coords, all_opt_atom_types, opt_generated_xrds, curr_gen_crystals_list = create_materials(xrd_args, 
                 frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True, symprec=0.01)
 
-        if args.save_traj:
-            n_steps = args.n_step_each * len(model.sigmas)
-            for item in crystals:
-                print(item)
-            assert crystals['all_frac_coords'].shape[0] == n_steps, f"{crystals['all_frac_coords'].shape[0]} != {n_steps}"
-            assert crystals['all_atom_types'].shape[0] == n_steps, f"{crystals['all_atom_types'].shape[0]} != {n_steps}"
-            print(f'{n_steps} total steps: save traj')
-
-            traj_folder = os.path.join(curr_material_folder, 'pred', 'diffusion_vis')
-            os.makedirs(traj_folder, exist_ok=True)
-
-            for step in range(0, n_steps, args.n_step_each):
-                curr_frac_coords = crystals['all_frac_coords'][step]
-                curr_atom_types = crystals['all_atom_types'][step]
-
-                assert curr_frac_coords.shape == frac_coords.shape, f"{curr_frac_coords.shape} != {frac_coords.shape}"
-                assert curr_atom_types.shape == atom_types.shape, f"{curr_atom_types.shape} != {atom_types.shape}"
-
-                curr_step_coords, curr_step_atom_types, curr_step_xrds, curr_step_singleton_crystal_list = \
-                    create_materials(xrd_args, curr_frac_coords, num_atoms, curr_atom_types, lengths, angles, 
-                                     create_xrd=True, symprec=0.01)
-                assert len(curr_step_singleton_crystal_list) == args.num_starting_points
-                curr_step_crystal = Crystal(curr_step_singleton_crystal_list[0]) # just save 1
-
-                # TODO: save these
-                curr_step_crystal.structure.to(filename=f'{traj_folder}/step{step}_material{j}_candidate{0}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
-    
         # plot base truth
         frac_coords = batch.frac_coords
         num_atoms = batch.num_atoms
@@ -829,6 +802,33 @@ def optimization(args, model, ld_kwargs, data_loader):
         # find the (num_candidates) minimum loss elements
         min_loss_indices = torch.argsort(loss).squeeze(0)[:args.num_candidates].tolist()
 
+        if args.save_traj:
+            n_steps = args.n_step_each * len(model.sigmas)
+            for item in crystals:
+                print(item)
+            assert crystals['all_frac_coords'].shape[0] == n_steps, f"{crystals['all_frac_coords'].shape[0]} != {n_steps}"
+            assert crystals['all_atom_types'].shape[0] == n_steps, f"{crystals['all_atom_types'].shape[0]} != {n_steps}"
+            print(f'{n_steps} total steps: save traj')
+
+            traj_folder = os.path.join(curr_material_folder, 'pred', 'diffusion_vis')
+            os.makedirs(traj_folder, exist_ok=True)
+
+            for step in range(0, n_steps, args.n_step_each):
+                curr_frac_coords = crystals['all_frac_coords'][step]
+                curr_atom_types = crystals['all_atom_types'][step]
+
+                assert curr_frac_coords.shape == crystals['frac_coords'].shape, f"{curr_frac_coords.shape} != {crystals['frac_coords'].shape}"
+                assert curr_atom_types.shape == crystals['atom_types'].shape, f"{curr_atom_types.shape} != {crystals['atom_types'].shape}"
+
+                curr_step_coords, curr_step_atom_types, curr_step_xrds, curr_step_singleton_crystal_list = \
+                    create_materials(xrd_args, curr_frac_coords, crystals['num_atoms'], curr_atom_types, crystals['lengths'], crystals['angles'], 
+                                     create_xrd=True, symprec=0.01)
+                assert len(curr_step_singleton_crystal_list) == args.num_starting_points
+                curr_step_crystal = Crystal(curr_step_singleton_crystal_list[min_loss_indices[0]]) # just save 1
+
+                # TODO: save these
+                curr_step_crystal.structure.to(filename=f'{traj_folder}/step{step}_material{j}_candidate{0}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
+    
         process_candidates(args=args, xrd_args=xrd_args, j=j,
                 curr_gen_crystals_list=curr_gen_crystals_list, 
                 all_opt_coords=all_opt_coords, all_opt_atom_types=all_opt_atom_types, 
