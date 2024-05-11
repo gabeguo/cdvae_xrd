@@ -10,6 +10,7 @@ from pymatgen.core import Structure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.io.cif import CifWriter, CifParser
 from tqdm import tqdm
+import shutil
 
 # import warnings
 # warnings.filterwarnings("ignore")
@@ -330,28 +331,32 @@ def create_data(args, filepath):
         # Calculate the XRD pattern
         pattern = xrd_calc.get_pattern(structure)
         simulated_xrd_tensor = create_xrd_tensor(args, pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
-        plt.plot(desired_Qs, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.4, label=f'Theoretical Calculation ({args.desired_wavelength})')
+        #plt.plot(desired_Qs, simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.4, label=f'Theoretical Calculation ({args.desired_wavelength})')
         plt.plot(desired_Qs, xrd_tensor.detach().cpu().numpy(), alpha=0.8, label='Experimentally Gathered')
 
-        # Sanity check spacegroups
-        sga = SpacegroupAnalyzer(structure)
-        print(sga.get_crystal_system())
-        conventional_structure = sga.get_conventional_standard_structure()
+        # # Sanity check spacegroups
+        # sga = SpacegroupAnalyzer(structure)
+        # print(sga.get_crystal_system())
+        # conventional_structure = sga.get_conventional_standard_structure()
 
         # alt_pattern = xrd_calc.get_pattern(conventional_structure)
         # alt_simulated_xrd_tensor = create_xrd_tensor(args, alt_pattern, wavelength=sim_wavelength, min_Q=min_Q, max_Q=max_Q)
         # plt.plot(desired_Qs, alt_simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated (spacegroup recalc)')
 
-        plt.title("Experimental XRD Pattern")
+        #plt.title("Experimental XRD Pattern")
         plt.xlabel(r'$Q (\mathring A^{-1})$')
         plt.ylabel("Scaled Intensity")
 
-        plt.grid()
+        plt.tight_layout()
 
-        plt.legend()
+        plt.grid()
+        plt.xlim(desired_Qs[0], desired_Qs[-1])
+        plt.ylim(0, 1)
+
+        #plt.legend(fontsize='large', loc=1)
         vis_filepath = os.path.join(args.output_dir, 'vis')
         os.makedirs(vis_filepath, exist_ok=True)
-        plt.savefig(os.path.join(vis_filepath, f'{filename}.png'))
+        plt.savefig(os.path.join(vis_filepath, f'{filename}.png'), dpi=400)
         plt.cla()
 
     # Pretty formula
@@ -387,6 +392,12 @@ def create_data(args, filepath):
         'spacegroup.number': spacegroup_number,
         'xrd': xrd_tensor
     }
+
+def copy_file(args, filepath):
+    copied_cif_folder = os.path.join(args.output_dir, 'cif_files')
+    os.makedirs(copied_cif_folder, exist_ok=True)
+    shutil.copy(filepath, copied_cif_folder)
+    return
 
 if __name__ == "__main__":
     FILEPATHS = [
@@ -444,6 +455,7 @@ if __name__ == "__main__":
         try:
             curr_data = create_data(args, filepath)
             output_df = output_df._append(curr_data, ignore_index=True)
+            copy_file(args, filepath)
         except AttributeError as e:
             print(e)
             print('abort element')
