@@ -344,8 +344,8 @@ def create_data(args, filepath):
         # plt.plot(desired_Qs, alt_simulated_xrd_tensor.detach().cpu().numpy(), alpha=0.6, label='simulated (spacegroup recalc)')
 
         #plt.title("Experimental XRD Pattern")
-        plt.xlabel(r'$Q (\mathring A^{-1})$')
-        plt.ylabel("Scaled Intensity")
+        # plt.xlabel(r'$Q (\mathring A^{-1})$')
+        # plt.ylabel("Scaled Intensity")
 
         plt.tight_layout()
 
