@@ -31,7 +31,8 @@ def update_curr_system_dict(aggregate_results, the_system, the_correlation,
                             match_status, the_r_factor):
     if the_system not in aggregate_results:
         aggregate_results[the_system] = {PEARSON_R: list(),
-                                         MATCH_RATE: list()}
+                                         MATCH_RATE: list(),
+                                         R_FACTOR: list()}
     aggregate_results[the_system][PEARSON_R].append(float(the_correlation))
     aggregate_results[the_system][MATCH_RATE].append(float(match_status))
     aggregate_results[the_system][R_FACTOR].append(float(the_r_factor))
