@@ -20,7 +20,7 @@ def calc_r_factor(gt_xrd, pred_xrd, Qs):
     assert np.min(pred_xrd) >= 0
     numerator = np.sum(delta_Q * (gt_xrd - pred_xrd)**2)
     denominator = np.sum(delta_Q * gt_xrd**2)
-    return numerator / denominator
+    return float(numerator / denominator)
 
 def plot_overlaid_graphs(actual, prediction_simulated, Qs, savepath):
     fig, ax = plt.subplots()
@@ -118,6 +118,7 @@ def compute_r_values(
     r_values['_std_r_value'] = float(np.std(all_r_values_flat_list))
     r_values['_avg_best_r_value'] = float(np.mean(best_r_values_by_material))
     r_values['_std_best_r_value'] = float(np.std(best_r_values_by_material))
+    # print(r_values)
 
     save_file = os.path.join(path, 'r_values.json')
     json.dump(r_values, open(save_file, 'w'), indent=4)
@@ -132,12 +133,12 @@ if __name__ == "__main__":
     N_postsubsample = 8192
 
     for path in [
-        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_',
-        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_replicate',
-        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_EXPERIMENTAL_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_sinc10Filter_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_baseline_noOpt',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_replicate',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc100_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_baseline_noOpt'
