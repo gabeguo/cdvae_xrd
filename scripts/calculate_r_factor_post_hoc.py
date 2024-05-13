@@ -114,10 +114,10 @@ def compute_r_values(
         best_r_values_by_material.append(best_r_value_curr_material)
 
     # log aggregate stats
-    r_values['_avg_r_value'] = np.mean(all_r_values_flat_list)
-    r_values['_std_r_value'] = np.std(all_r_values_flat_list)
-    r_values['_avg_best_r_value'] = np.mean(best_r_values_by_material)
-    r_values['_std_best_r_value'] = np.std(best_r_values_by_material)
+    r_values['_avg_r_value'] = float(np.mean(all_r_values_flat_list))
+    r_values['_std_r_value'] = float(np.std(all_r_values_flat_list))
+    r_values['_avg_best_r_value'] = float(np.mean(best_r_values_by_material))
+    r_values['_std_best_r_value'] = float(np.std(best_r_values_by_material))
 
     save_file = os.path.join(path, 'r_values.json')
     json.dump(r_values, open(save_file, 'w'), indent=4)
