@@ -60,7 +60,7 @@ def main(args):
                           if 'material' in folder]
     r_factor_filepath = os.path.join(args.results_dir, 'r_values.json')
     with open(r_factor_filepath, 'r') as fin:
-        r_value_dict = json.load(r_factor_filepath)
+        r_value_dict = json.load(fin)
     
     for material_folder in tqdm(the_result_folders):
         cif_filepath = os.path.join(args.results_dir, material_folder, 'gt', 'cif', f'{material_folder}.cif')
