@@ -148,9 +148,10 @@ def save_xrds_for_pregenerated_results(input_dirpath, sinc_size, filter='sinc',
         curr_gt_cif_path = os.path.join(input_dirpath, curr_material, 'gt',
             'cif', f'noSpacegroup_{curr_material}.cif')
         assert os.path.exists(curr_gt_cif_path)
+        numerical_descriptor = sinc_size if filter == 'sinc' else gaussian_sigma_frac
         desired_gt_xrd_filepath_without_ext = os.path.join(input_dirpath, curr_material, 'gt',
             'xrd', 
-            f'hiRes_{filter}_{sinc_size if filter == 'sinc' else gaussian_sigma_frac}_{curr_material}')
+            f'hiRes_{filter}_{numerical_descriptor}_{curr_material}')
         generate_and_save_xrd_for_cif_file(
             cif_filepath=curr_gt_cif_path, 
             output_filepath_without_ext=desired_gt_xrd_filepath_without_ext,
@@ -170,7 +171,7 @@ def save_xrds_for_pregenerated_results(input_dirpath, sinc_size, filter='sinc',
             assert os.path.exists(curr_pred_cif_path)
             desired_pred_filepath_without_ext = os.path.join(input_dirpath, curr_material, 
                 'pred', f'candidate{pred_idx}', 'xrd_opt_gen', 
-                f'{filter}_{sinc_size if filter == 'sinc' else gaussian_sigma_frac}_{curr_material}')
+                f'{filter}_{numerical_descriptor}_{curr_material}')
             generate_and_save_xrd_for_cif_file(
                 cif_filepath=curr_pred_cif_path, 
                 output_filepath_without_ext=desired_pred_filepath_without_ext,
