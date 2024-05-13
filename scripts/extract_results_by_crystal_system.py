@@ -10,6 +10,7 @@ from tqdm import tqdm
 MATCH_RATE = "match_rate"
 PEARSON_R = "Mean best Pearson's correlation coefficient between PDFs"
 COUNT = 'count'
+R_FACTOR = 'r_factor'
 
 def is_match(the_dict):
     all_match_statuses = the_dict[MATCH_RATE]
@@ -27,12 +28,13 @@ def get_crystal_system(cif_filepath):
     return sga.get_crystal_system()
 
 def update_curr_system_dict(aggregate_results, the_system, the_correlation, 
-                            match_status):
+                            match_status, the_r_factor):
     if the_system not in aggregate_results:
         aggregate_results[the_system] = {PEARSON_R: list(),
                                          MATCH_RATE: list()}
     aggregate_results[the_system][PEARSON_R].append(float(the_correlation))
     aggregate_results[the_system][MATCH_RATE].append(float(match_status))
+    aggregate_results[the_system][R_FACTOR].append(float(the_r_factor))
 
     return
 
@@ -41,16 +43,24 @@ def postprocess(aggregate_results):
         system_results = aggregate_results[crystal_system]
         system_results[COUNT] = len(system_results[MATCH_RATE])
         assert system_results[COUNT] == len(system_results[PEARSON_R])
-        system_results[PEARSON_R] = (round(np.mean(system_results[PEARSON_R]), 4),
-                                     round(np.std(system_results[PEARSON_R]), 4))
+        system_results[PEARSON_R] = (round(np.mean(system_results[PEARSON_R]), 6),
+                                     round(np.std(system_results[PEARSON_R]), 6))
         system_results[MATCH_RATE] = np.mean(system_results[MATCH_RATE])
+        system_results[R_FACTOR] = (round(np.mean(system_results[R_FACTOR]), 6),
+                                    round(np.std(system_results[R_FACTOR], 6)))
     return
 
+def get_r_factor(material_full_name, r_factor_dict):
+    return max(r_factor_dict[material_full_name].values())
+    
 def main(args):
     aggregate_results = dict()
 
     the_result_folders = [folder for folder in os.listdir(args.results_dir) \
                           if 'material' in folder]
+    r_factor_filepath = os.path.join(args.results_dir, 'r_values.json')
+    with open(r_factor_filepath, 'r') as fin:
+        r_value_dict = json.load(r_factor_filepath)
     
     for material_folder in tqdm(the_result_folders):
         cif_filepath = os.path.join(args.results_dir, material_folder, 'gt', 'cif', f'{material_folder}.cif')
@@ -63,9 +73,11 @@ def main(args):
         the_system = get_crystal_system(cif_filepath)
         the_correlation = get_correlation(curr_metrics_dict)
         match_status = is_match(curr_metrics_dict)
+        the_r_factor = get_r_factor(material_folder, r_value_dict)
         update_curr_system_dict(aggregate_results, 
                                 the_system=the_system, the_correlation=the_correlation, 
-                                match_status=match_status)
+                                match_status=match_status,
+                                the_r_factor=the_r_factor)
     
     postprocess(aggregate_results)
     print(json.dumps(aggregate_results, indent=4))
