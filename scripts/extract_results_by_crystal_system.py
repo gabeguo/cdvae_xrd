@@ -48,7 +48,7 @@ def postprocess(aggregate_results):
                                      round(np.std(system_results[PEARSON_R]), 6))
         system_results[MATCH_RATE] = np.mean(system_results[MATCH_RATE])
         system_results[R_FACTOR] = (round(np.mean(system_results[R_FACTOR]), 6),
-                                    round(np.std(system_results[R_FACTOR], 6)))
+                                    round(np.std(system_results[R_FACTOR]), 6))
     return
 
 def get_r_factor(material_full_name, r_factor_dict):
