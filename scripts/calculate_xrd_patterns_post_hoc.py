@@ -106,7 +106,7 @@ def generate_and_save_xrd_for_cif_file(cif_filepath, output_filepath_without_ext
                                        wave_source, xrd_vector_dim, min_2_theta, max_2_theta,
                                        nanomaterial_size, plot_xrd,
                                        broadening='sinc',
-                                       gaussian_sigma_frac=0.01):
+                                       gaussian_sigma_frac=5e-3):
     curr_structure = read_structure(cif_filepath)
     ideal_xrd_tensor = generate_xrd(wave_source=wave_source, 
                                     curr_structure=curr_structure, 
@@ -219,7 +219,7 @@ if __name__ == "__main__":
             input_dirpath=path,
             sinc_size=10,
             filter='gaussian',
-            gaussian_sigma_frac=0.01
+            gaussian_sigma_frac=5e-3
         )
 
     for path in [
@@ -231,5 +231,5 @@ if __name__ == "__main__":
             input_dirpath=path,
             sinc_size=100,
             filter='gaussian',
-            gaussian_sigma_frac=0.01
+            gaussian_sigma_frac=5e-3
         )
