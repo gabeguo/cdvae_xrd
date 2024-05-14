@@ -6,11 +6,11 @@ All code blocks assume you start from this directory.
 
 ## Requirements
 
-<span style="color:red">tbd, need to add requirements.txt</span>
+**tbd, need to add requirements.txt**
 
 ## Data Generation
 
-<span style="color:red">tbd, need to figure out how to upload</span>
+**tbd, need to figure out how to upload**
 
 ## Training
 
