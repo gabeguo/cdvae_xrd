@@ -6,7 +6,18 @@ All code blocks assume you start from this directory.
 
 ## Requirements
 
-**tbd, need to add requirements.txt**
+Use Python 3.10.0.
+
+```
+pip install -r requirements.txt
+```
+
+In our experience, depending on the system, you may have trouble with:
+- [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric)
+- [PyTorch Scatter](https://github.com/rusty1s/pytorch_scatter)
+- [PyTorch Sparse](https://github.com/rusty1s/pytorch_sparse)
+
+If so, just follow the instructions on their GitHub repos to install the proper versions.
 
 ## Data Generation
 
