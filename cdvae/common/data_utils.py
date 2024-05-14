@@ -652,7 +652,7 @@ def get_scaler_from_data_list(data_list, key):
 
 def preprocess(input_file, num_workers, niggli, primitive, graph_method,
                prop_list):
-    df = pd.read_pickle(input_file)
+    df = pd.read_csv(input_file)
 
     def process_one(row, niggli, primitive, graph_method, prop_list):
         crystal_str = row['cif']
