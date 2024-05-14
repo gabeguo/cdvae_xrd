@@ -20,7 +20,7 @@ def split_data(args):
     for file in files:
         print(f'Processing {file}')
         # Load the data
-        curr_data = pd.read_csv(os.path.join(args.init_data_dir, file))
+        curr_data = pd.read_pickle(os.path.join(args.init_data_dir, file))
         print(curr_data.head())
         all_data.append(curr_data)
         print(len(curr_data))

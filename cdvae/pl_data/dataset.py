@@ -35,7 +35,7 @@ class CrystDataset(Dataset):
         super().__init__()
         self.path = path
         self.name = name
-        self.df = pd.read_csv(path)
+        self.df = pd.read_pickle(path)
         self.prop = prop
         self.niggli = niggli
         self.primitive = primitive

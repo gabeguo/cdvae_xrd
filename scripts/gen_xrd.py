@@ -83,7 +83,7 @@ def gen_xrd(args):
         xrd_df = pd.DataFrame(columns=['xrd'], dtype=object)
         xrd_df['xrd'] = xrd_tensor_list
         data = pd.concat([data, xrd_df], axis=1)
-        data.to_csv(os.path.join(args.save_dir, file))
+        data.to_pickle(os.path.join(args.save_dir, file))
         # torch.save(xrd_tensor, os.path.join(args.save_dir, file.replace('.csv', '.pt')))
 
 
