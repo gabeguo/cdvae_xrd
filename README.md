@@ -21,12 +21,14 @@ If so, just follow the instructions on their GitHub repos to install the proper 
 
 ## Data Generation
 
-Before running, replace `/home/gabeguo/` in `create_data.sh` with your home directory.
+Before running, replace `/home/gabeguo/` in `create_data.sh` with your home directory. This takes less than an hour.
 
 ```
 cd scripts
 bash create_data.sh
 ```
+
+Data should be saved in `data/mp_20`. Despite the name, it's not a .csv (it's a pickle file), because the data contains PyTorch tensors.
 
 ## Training
 
