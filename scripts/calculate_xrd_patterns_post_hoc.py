@@ -125,6 +125,11 @@ def generate_and_save_xrd_for_cif_file(cif_filepath, output_filepath_without_ext
         noised_xrd_array = gaussian_filter1d(ideal_xrd_tensor.numpy(),
                     sigma=int(len(Qs) * gaussian_sigma_frac), 
                     mode='constant', cval=0)    
+    elif broadening == 'both':
+        noised_xrd_array = apply_filter(ideal_xrd_tensor.numpy(), sinc_filter)
+        noised_xrd_array = gaussian_filter1d(noised_xrd_array,
+                    sigma=int(len(Qs) * gaussian_sigma_frac), 
+                    mode='constant', cval=0)    
     else:
         raise ValueError(f'{broadening} invalid')
     noised_xrd_array = post_process_filtered_xrd(noised_xrd_array)
@@ -148,7 +153,14 @@ def save_xrds_for_pregenerated_results(input_dirpath, sinc_size, filter='sinc',
         curr_gt_cif_path = os.path.join(input_dirpath, curr_material, 'gt',
             'cif', f'noSpacegroup_{curr_material}.cif')
         assert os.path.exists(curr_gt_cif_path)
-        numerical_descriptor = sinc_size if filter == 'sinc' else gaussian_sigma_frac
+        if filter == 'sinc':
+            numerical_descriptor = sinc_size
+        elif filter == 'gaussian':
+            numerical_descriptor = gaussian_sigma_frac
+        elif filter == 'both':
+            numerical_descriptor = f'{sinc_size}_{gaussian_sigma_frac}'
+        else:
+            raise ValueError(f'bad filter: {filter}')
         desired_gt_xrd_filepath_without_ext = os.path.join(input_dirpath, curr_material, 'gt',
             'xrd', 
             f'hiRes_{filter}_{numerical_descriptor}_{curr_material}')
