@@ -4,6 +4,8 @@ This is the repository for *XRDnet*, the world's first end-to-end nanostructure 
 
 All code blocks assume you start from this directory.
 
+Much thanks to [CDVAE](https://github.com/txie-93/cdvae).
+
 ## Requirements
 
 Use Python 3.10.0.
@@ -19,7 +21,21 @@ In our experience, depending on the system, you may have trouble with:
 
 If so, just follow the instructions on their GitHub repos to install the proper versions.
 
-## Data Generation
+## Data Procurement
+
+### Use Our Data
+
+See `data/mp_20` for *MP-20-PXRD*, our modification of MP-20 with PXRD patterns (no broadening added).
+
+See `data/experimental_data` for the crystal structures with experimentally observed PXRD patterns.
+
+Despite the filenames, they're not .csv  files (they're pickle files), because the data contains PyTorch tensors.
+
+No action needs to be taken on data, as the scripts automatically load the datasets.
+
+### Generate It Yourself
+
+This is unnecessary, because we already have created and uploaded the datasets for you. However, if you wish to try something new on the MP-20 dataset (let's say, different wavelengths or data splits), you can follow these instructions.
 
 Before running, replace `/home/gabeguo/` in `create_data.sh` with your home directory. This takes less than an hour.
 
@@ -28,7 +44,7 @@ cd scripts
 bash create_data.sh
 ```
 
-Data should be saved in `data/mp_20`. Despite the name, it's not a .csv (it's a pickle file), because the data contains PyTorch tensors.
+Data should be saved in `data/mp_20`. 
 
 ## Training
 
