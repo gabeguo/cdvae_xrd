@@ -219,6 +219,7 @@ def save_sinc_xrds_for_curated_results(input_dirpath):
     return
 
 if __name__ == "__main__":
+    # gaussian patterns
     for path in [
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
@@ -244,4 +245,25 @@ if __name__ == "__main__":
             sinc_size=100,
             filter='gaussian',
             gaussian_sigma_frac=5e-3
+        )
+
+    # sinc + gaussian patterns
+    for path in [
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_'
+    ]:
+        save_xrds_for_pregenerated_results(
+            input_dirpath=path,
+            sinc_size=10,
+            filter='both',
+            gaussian_sigma_frac=1e-2
+        )
+
+    for path in [
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc100_'
+    ]:
+        save_xrds_for_pregenerated_results(
+            input_dirpath=path,
+            sinc_size=100,
+            filter='both',
+            gaussian_sigma_frac=1e-2
         )
