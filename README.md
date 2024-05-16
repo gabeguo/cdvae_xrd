@@ -17,8 +17,9 @@ In our experience, depending on the system, you may have trouble with:
 If so, just follow the instructions on their GitHub repos to install the versions that align with your CUDA version. Here are the suggested ways to do so:
 
 ```
+pip install torch==2.0.0
 pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
-pip install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+pip install torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
 ```
 
 After that, run the following command to install remaining requirements.
