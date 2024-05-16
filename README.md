@@ -15,11 +15,20 @@ pip install -r requirements.txt
 ```
 
 In our experience, depending on the system, you may have trouble with:
-- [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric)
 - [PyTorch Scatter](https://github.com/rusty1s/pytorch_scatter)
 - [PyTorch Sparse](https://github.com/rusty1s/pytorch_sparse)
 
-If so, just follow the instructions on their GitHub repos to install the proper versions.
+If so, just follow the instructions on their GitHub repos to install the versions that align with your CUDA version. Here are the suggested ways to do so:
+
+```
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+pip install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+```
+
+Finally, install this package with
+```
+pip install -e .
+``` 
 
 ## Data Procurement
 
