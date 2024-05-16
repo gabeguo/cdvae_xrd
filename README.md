@@ -130,11 +130,11 @@ hydra/singlerun/
 
 Run the following code (assuming you are in `cdvae_xrd`) to create the proper evaluation setup for experimental data:
 ```
-cd ../hydra/singlerun
+cd ../hydra/singlerun/[whatever date you trained model on]
 cp mp_20_sinc10 mp_20_sinc10_EXPERIMENTAL_TEST
 ```
 
-Now, go into `mp_20_sinc10_experimental/.hydra/config.yaml` and change line 7 to be:
+Now, go into `mp_20_sinc10_EXPERIMENTAL_TEST/.hydra/config.yaml` and change line 7 to be:
 ```
 root_path: ${oc.env:PROJECT_ROOT}/data/experimental_xrd
 ```
