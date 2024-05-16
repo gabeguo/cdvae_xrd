@@ -8,18 +8,35 @@ Much thanks to [CDVAE](https://github.com/txie-93/cdvae).
 
 ## Requirements
 
-Use Python 3.10.0.
+Use Python 3.9.18.
+
+In our experience, depending on the system, you may have trouble with:
+- [PyTorch Scatter](https://github.com/rusty1s/pytorch_scatter)
+- [PyTorch Sparse](https://github.com/rusty1s/pytorch_sparse)
+
+If so, just follow the instructions on their GitHub repos to install the versions that align with your CUDA version. Here are the suggested ways to do so:
+
+```
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+pip install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+```
+
+After that, run the following command to install remaining requirements.
 
 ```
 pip install -r requirements.txt
 ```
 
-In our experience, depending on the system, you may have trouble with:
-- [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric)
-- [PyTorch Scatter](https://github.com/rusty1s/pytorch_scatter)
-- [PyTorch Sparse](https://github.com/rusty1s/pytorch_sparse)
+Setup environment variables by making a copy of the `.env.template` file and rename it to `.env`. Modify the following environment variables in `.env`.
 
-If so, just follow the instructions on their GitHub repos to install the proper versions.
+- `PROJECT_ROOT`: path to the folder that contains this repo
+- `HYDRA_JOBS`: path to a folder to store hydra outputs
+- `WABDB`: path to a folder to store wabdb outputs
+
+Finally, install this package with
+```
+pip install -e .
+``` 
 
 ## Data Procurement
 
