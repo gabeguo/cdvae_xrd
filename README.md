@@ -17,8 +17,9 @@ In our experience, depending on the system, you may have trouble with:
 If so, just follow the instructions on their GitHub repos to install the versions that align with your CUDA version. Here are the suggested ways to do so:
 
 ```
+pip install torch==2.0.0
 pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
-pip install torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+pip install torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
 ```
 
 After that, run the following command to install remaining requirements.
@@ -129,11 +130,11 @@ hydra/singlerun/
 
 Run the following code (assuming you are in `cdvae_xrd`) to create the proper evaluation setup for experimental data:
 ```
-cd ../hydra/singlerun
+cd ../hydra/singlerun/[whatever date you trained model on]
 cp mp_20_sinc10 mp_20_sinc10_EXPERIMENTAL_TEST
 ```
 
-Now, go into `mp_20_sinc10_experimental/.hydra/config.yaml` and change line 7 to be:
+Now, go into `mp_20_sinc10_EXPERIMENTAL_TEST/.hydra/config.yaml` and change line 7 to be:
 ```
 root_path: ${oc.env:PROJECT_ROOT}/data/experimental_xrd
 ```
