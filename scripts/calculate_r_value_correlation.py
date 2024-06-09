@@ -14,56 +14,63 @@ def get_refined_candidate_to_rw(input_filepath):
             if len(the_tokens) == 0:
                 continue
             assert len(the_tokens) == 2, f"{the_tokens}"
-            curr_candidate_name = the_tokens[0]
+            curr_candidate_name = int(the_tokens[0])
             curr_rw = float(the_tokens[1]) / 100
             ret_val[curr_candidate_name] = curr_rw
+    print('r values refined:', ret_val)
     return ret_val
 
-# take only best Rw
-def filter_candidates(refined_candidates):
-    ret_val = dict()
-    # group them by material
-    grouped_by_material = dict()
-    for curr_candidate_name in refined_candidates:
-        curr_material_name = curr_candidate_name[:-len('candidate0')]
-        if curr_material_name not in grouped_by_material:
-            grouped_by_material[curr_material_name] = dict()
-        grouped_by_material[curr_material_name][curr_candidate_name] = refined_candidates[curr_candidate_name]
-    # take the best candidate only, after refinement
-    for the_material in grouped_by_material:
-        #print(the_material)
-        assert len(grouped_by_material[the_material]) <= 5, grouped_by_material[the_material]
-        material_candidates = grouped_by_material[the_material]
-        best_candidate = ''
-        best_r = 1e6
-        for curr_candidate in material_candidates:
-            if material_candidates[curr_candidate] < best_r:
-                best_r = material_candidates[curr_candidate]
-                best_candidate = curr_candidate
-        ret_val[best_candidate] = best_r
-    #print(ret_val)
-
-    return ret_val
-
-def get_unrefined_candidate_to_rw(input_filepath):
+def get_unrefined_candidate_to_rw(input_filepath, desired_candidates):
     ret_val = dict()
     with open(input_filepath, 'r') as fin:
         the_results = json.load(fin)
         for the_material in the_results:
+            if not any([f'material{curr_material_num}_' \
+                        in the_material for curr_material_num in desired_candidates]):
+                continue
+            curr_material_num = int(the_material.split('_')[0][len('material'):])
+            # print('curr material num', curr_material_num)
             curr_material_results = the_results[the_material]
             if not isinstance(curr_material_results, dict):
                 continue
+            found = False
             for the_candidate in curr_material_results:
-                full_name = f"{the_material}_{the_candidate}"
+                if the_candidate != f'candidate{desired_candidates[curr_material_num]}':
+                    continue
+                found = True
                 the_rval = curr_material_results[the_candidate]
-                ret_val[full_name] = the_rval
+                ret_val[curr_material_num] = the_rval
+            if not found:
+                raise ValueError('could not find candidate for:', the_material)
+    assert len(ret_val) == 20, ret_val
+    print('r values unrefined:', ret_val)
     return ret_val
+
+def get_desired_candidates(curated_candidates_folder, sinc_level):
+    materialNum_to_candidateNum = dict()
+    for curr_material in os.listdir(curated_candidates_folder):
+        if 'material' not in curr_material:
+            continue
+        material_num = int(curr_material.split('_')[0][len('material'):])
+        # print('material', material_num)
+        curr_material_folder = os.path.join(curated_candidates_folder, curr_material)
+        found = False
+        for the_filename in os.listdir(curr_material_folder):
+            if f'pred_sinc{sinc_level}' in the_filename:
+                candidate_num = int(the_filename.split('_')[3][len('candidate'):])
+                # print('\tcandidate', candidate_num)
+                materialNum_to_candidateNum[material_num] = candidate_num
+                found = True
+                break
+        if not found:
+            raise ValueError('could not find desired candidate')
+    assert len(materialNum_to_candidateNum) == 20, materialNum_to_candidateNum
+    return materialNum_to_candidateNum
 
 def main(args):
     refined_candidate_to_rw = get_refined_candidate_to_rw(args.refined_txt)
-    # refined_candidate_to_rw = filter_candidates(refined_candidate_to_rw)
-    unrefined_candidate_to_rw = get_unrefined_candidate_to_rw(args.unrefined_json)
-    # unrefined_candidate_to_rw = filter_candidates(unrefined_candidate_to_rw)
+    desired_candidates = get_desired_candidates(args.curated_candidates_folder, args.sinc)
+    unrefined_candidate_to_rw = get_unrefined_candidate_to_rw(args.unrefined_json, desired_candidates)
 
     print(f'num refined candidates: {len(refined_candidate_to_rw)}')
     print(f'num unrefined candidates: {len(unrefined_candidate_to_rw)}')
@@ -75,13 +82,20 @@ def main(args):
     unrefined_rws_ordered = list() 
     refined_rws_ordered = list()
 
+    num_outliers = 0
     for candidate_name in refined_candidate_to_rw:
         curr_unrefined_rw = unrefined_candidate_to_rw[candidate_name]
         curr_refined_rw = refined_candidate_to_rw[candidate_name]
 
+        if curr_refined_rw > args.thresh or curr_unrefined_rw > args.thresh:
+            num_outliers += 1
+            continue
+
         unrefined_rws_ordered.append(curr_unrefined_rw)
         refined_rws_ordered.append(curr_refined_rw)
     
+    print(f"{num_outliers} outliers")
+
     # calculate linear regression
     regression_result = scipy.stats.linregress(x=unrefined_rws_ordered, y=refined_rws_ordered)
     print(f'correlation between refined and unrefined: {regression_result.rvalue}')
@@ -91,13 +105,15 @@ def main(args):
     plt.plot(unrefined_rws_ordered, refined_rws_ordered, 'o')
     plt.xlabel('R_w: raw AI generation')
     plt.ylabel('R_w: after PDF refinement')
-    plt.plot(unrefined_rws_ordered, regression_result.intercept + regression_result.slope * np.array(unrefined_rws_ordered), 
+    generic_x_vals = np.linspace(0, max(max(unrefined_rws_ordered), max(refined_rws_ordered)), 20)
+    plt.plot(generic_x_vals, regression_result.intercept + regression_result.slope * generic_x_vals, 
              'r', label='fitted line')
-    plt.plot(np.linspace(0, max(unrefined_rws_ordered)), np.linspace(0, max(unrefined_rws_ordered)),
+    plt.plot(generic_x_vals, generic_x_vals,
              'g', marker='', linestyle='--', label='identity line')
     plt.grid()
-    plt.xlim(0, 1.6)
-    plt.ylim(0, 1.6)
+    # plt.xlim(0, 1.4)
+    # plt.ylim(0, 1.4)
+    plt.title(f'Before and After Refinement: sinc{args.sinc}')
     #plt.xlim(min(unrefined_rws_ordered), max(unrefined_rws_ordered))
     #plt.ylim(min(unrefined_rws_ordered), max(unrefined_rws_ordered))
     plt.legend()
@@ -117,6 +133,7 @@ def main(args):
     
     # save figure
     plot_filepath = os.path.join(args.save_dir, 'regression_plot.pdf')
+    plot_filepath = os.path.join(args.save_dir, 'regression_plot.png')
     plt.savefig(plot_filepath)
     plt.close()
 
@@ -130,6 +147,12 @@ if __name__ == "__main__":
                         help='txt file with r values for each of the refined candidates')
     parser.add_argument('--save_dir', type=str,
                         help='directory to save results to')
+    parser.add_argument('--curated_candidates_folder', type=str,
+                        help='folder directory of the data we sent to Max')
+    parser.add_argument('--sinc', type=int,
+                        help='desired sinc level')
+    parser.add_argument('--thresh', type=float, default=2.0,
+                        help='threshold for outlier R_w values')
     args = parser.parse_args()
 
     main(args)
