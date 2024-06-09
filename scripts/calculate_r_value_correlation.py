@@ -107,7 +107,9 @@ def main(args):
     plt.ylabel('R_w: after PDF refinement')
     generic_x_vals = np.linspace(0, max(max(unrefined_rws_ordered), max(refined_rws_ordered)), 20)
     plt.plot(generic_x_vals, regression_result.intercept + regression_result.slope * generic_x_vals, 
-             'r', label='fitted line')
+             'r', 
+             label=f"fitted line: y = {regression_result.slope:.3f} * x + {regression_result.intercept:.3f}" + 
+                f" (corr = {regression_result.rvalue:.3f})")
     plt.plot(generic_x_vals, generic_x_vals,
              'g', marker='', linestyle='--', label='identity line')
     plt.grid()
@@ -133,8 +135,8 @@ def main(args):
     
     # save figure
     plot_filepath = os.path.join(args.save_dir, 'regression_plot.pdf')
-    plot_filepath = os.path.join(args.save_dir, 'regression_plot.png')
     plt.savefig(plot_filepath)
+    plt.savefig(plot_filepath.replace('.pdf', '.png'), dpi=300)
     plt.close()
 
     return
