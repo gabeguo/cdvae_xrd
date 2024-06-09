@@ -104,14 +104,22 @@ def main(args):
     # plot
     plt.plot(unrefined_rws_ordered, refined_rws_ordered, 'o')
     plt.xlabel('R_w: raw AI generation')
-    plt.ylabel('R_w: after PDF refinement')
-    generic_x_vals = np.linspace(0, max(max(unrefined_rws_ordered), max(refined_rws_ordered)), 20)
+    plt.ylabel('R_w: after XRD refinement')
+    max_val = max(max(unrefined_rws_ordered), max(refined_rws_ordered))
+    max_val = int(max_val * 11) / 10
+    generic_x_vals = np.linspace(0, max_val, 20)
+    plt.xlim(0, max_val)
+    plt.ylim(0, max_val)
     plt.plot(generic_x_vals, regression_result.intercept + regression_result.slope * generic_x_vals, 
-             'r', 
+             'blue', 
              label=f"fitted line: y = {regression_result.slope:.3f} * x + {regression_result.intercept:.3f}" + 
                 f" (corr = {regression_result.rvalue:.3f})")
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.0), np.full_like(generic_x_vals, 0.2), color='green', alpha=0.2)
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.2), np.full_like(generic_x_vals, 0.4), color='yellow', alpha=0.2)
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.4), np.full_like(generic_x_vals, 0.8), color='orange', alpha=0.2)
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.8), np.full_like(generic_x_vals, max_val), color='red', alpha=0.2)
     plt.plot(generic_x_vals, generic_x_vals,
-             'g', marker='', linestyle='--', label='identity line')
+             'gray', alpha=0.6, marker='', linestyle='--', label='identity line')
     plt.grid()
     # plt.xlim(0, 1.4)
     # plt.ylim(0, 1.4)
@@ -127,7 +135,12 @@ def main(args):
         ret_val = {
             'pearson correlation':regression_result.rvalue,
             'slope':regression_result.slope,
-            'intercept':regression_result.intercept
+            'intercept':regression_result.intercept,
+            'num outliers':num_outliers,
+            'unrefined mean r_value': np.mean(unrefined_rws_ordered),
+            'unrefined std r_value': np.std(unrefined_rws_ordered),
+            'refined mean r_value': np.mean(refined_rws_ordered),
+            'refined std r_value': np.std(refined_rws_ordered)
         }
         ret_val.update(vars(args))
         json.dump(ret_val, fout, indent=4)
