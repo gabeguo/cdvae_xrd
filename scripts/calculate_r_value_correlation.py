@@ -87,7 +87,7 @@ def main(args):
         curr_unrefined_rw = unrefined_candidate_to_rw[candidate_name]
         curr_refined_rw = refined_candidate_to_rw[candidate_name]
 
-        if curr_refined_rw > args.thresh or curr_unrefined_rw > args.thresh:
+        if curr_refined_rw > args.thresh_y or curr_unrefined_rw > args.thresh_x:
             num_outliers += 1
             continue
 
@@ -105,28 +105,27 @@ def main(args):
     plt.plot(unrefined_rws_ordered, refined_rws_ordered, 'o')
     plt.xlabel('R_w: raw AI generation')
     plt.ylabel('R_w: after XRD refinement')
-    max_val = max(max(unrefined_rws_ordered), max(refined_rws_ordered))
-    max_val = int(max_val * 11) / 10
-    generic_x_vals = np.linspace(0, max_val, 20)
-    plt.xlim(0, max_val)
-    plt.ylim(0, max_val)
-    plt.plot(generic_x_vals, regression_result.intercept + regression_result.slope * generic_x_vals, 
-             'blue', 
-             label=f"fitted line: y = {regression_result.slope:.3f} * x + {regression_result.intercept:.3f}" + 
-                f" (corr = {regression_result.rvalue:.3f})")
-    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.0), np.full_like(generic_x_vals, 0.2), color='green', alpha=0.2)
-    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.2), np.full_like(generic_x_vals, 0.4), color='yellow', alpha=0.2)
-    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.4), np.full_like(generic_x_vals, 0.8), color='orange', alpha=0.2)
-    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.8), np.full_like(generic_x_vals, max_val), color='red', alpha=0.2)
+    generic_x_vals = np.linspace(0, max(args.thresh_x, args.thresh_y), 20)
+    plt.xlim(0, args.thresh_x)
+    plt.ylim(0, args.thresh_y)
+    # plt.plot(generic_x_vals, regression_result.intercept + regression_result.slope * generic_x_vals, 
+    #          'blue', 
+    #          label=f"fitted line: y = {regression_result.slope:.3f} * x + {regression_result.intercept:.3f}" + 
+    #             f" (corr = {regression_result.rvalue:.3f})")
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.0), np.full_like(generic_x_vals, 0.05), color='darkgreen', alpha=0.2)
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.05), np.full_like(generic_x_vals, 0.1), color='palegreen', alpha=0.2)
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.1), np.full_like(generic_x_vals, 0.2), color='yellow', alpha=0.2)
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.2), np.full_like(generic_x_vals, 0.4), color='orange', alpha=0.2)
+    plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.4), np.full_like(generic_x_vals, args.thresh_y), color='red', alpha=0.2)
     plt.plot(generic_x_vals, generic_x_vals,
              'gray', alpha=0.6, marker='', linestyle='--', label='identity line')
     plt.grid()
     # plt.xlim(0, 1.4)
     # plt.ylim(0, 1.4)
-    plt.title(f'Before and After Refinement: sinc{args.sinc}')
+    # plt.title(f'Before and After Refinement: sinc{args.sinc}')
     #plt.xlim(min(unrefined_rws_ordered), max(unrefined_rws_ordered))
     #plt.ylim(min(unrefined_rws_ordered), max(unrefined_rws_ordered))
-    plt.legend()
+    # plt.legend()
     
     # save regression results
     os.makedirs(args.save_dir, exist_ok=True)
@@ -147,6 +146,7 @@ def main(args):
         print(json.dumps(ret_val, indent=4))
     
     # save figure
+    plt.tight_layout()
     plot_filepath = os.path.join(args.save_dir, 'regression_plot.pdf')
     plt.savefig(plot_filepath)
     plt.savefig(plot_filepath.replace('.pdf', '.png'), dpi=300)
@@ -166,8 +166,10 @@ if __name__ == "__main__":
                         help='folder directory of the data we sent to Max')
     parser.add_argument('--sinc', type=int,
                         help='desired sinc level')
-    parser.add_argument('--thresh', type=float, default=2.0,
-                        help='threshold for outlier R_w values')
+    parser.add_argument('--thresh_x', type=float, default=1.4,
+                        help='threshold for outlier R_w values before refinement')
+    parser.add_argument('--thresh_y', type=float, default=1.0,
+                        help='threshold for outlier R_w values after refinement')
     args = parser.parse_args()
 
     main(args)
