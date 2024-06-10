@@ -42,7 +42,7 @@ def main(args):
 
     # plot
     os.makedirs(args.output_dir, exist_ok=True)
-    output_filepath = os.path.join(args.output_dir, 'r_value_histogram.pdf')
+    output_filepath = os.path.join(args.output_dir, 'r_value_cdf.pdf')
     plt.grid(which='minor', color='#CCCCCC')
     plt.grid(which='major', color='#777777')
     plt.tight_layout()
