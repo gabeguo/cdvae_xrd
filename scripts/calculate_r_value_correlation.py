@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import os
 import json
 
@@ -119,14 +120,22 @@ def main(args):
     plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.4), np.full_like(generic_x_vals, args.thresh_y), color='red', alpha=0.2)
     plt.plot(generic_x_vals, generic_x_vals,
              'gray', alpha=0.6, marker='', linestyle='--', label='identity line')
-    plt.grid()
     # plt.xlim(0, 1.4)
     # plt.ylim(0, 1.4)
     # plt.title(f'Before and After Refinement: sinc{args.sinc}')
     #plt.xlim(min(unrefined_rws_ordered), max(unrefined_rws_ordered))
     #plt.ylim(min(unrefined_rws_ordered), max(unrefined_rws_ordered))
     # plt.legend()
-    
+    # Thanks https://stackoverflow.com/a/58675407
+    major_tick_spacing = 0.2
+    plt.gca().xaxis.set_major_locator(ticker.MultipleLocator(major_tick_spacing))
+    plt.gca().yaxis.set_major_locator(ticker.MultipleLocator(major_tick_spacing))
+    minor_tick_spacing = 0.05
+    plt.gca().xaxis.set_minor_locator(ticker.MultipleLocator(minor_tick_spacing))
+    plt.gca().yaxis.set_minor_locator(ticker.MultipleLocator(minor_tick_spacing))
+    plt.grid(which='minor', color='#CCCCCC')
+    plt.grid(which='major', color='#777777')
+
     # save regression results
     os.makedirs(args.save_dir, exist_ok=True)
     regression_filepath = os.path.join(args.save_dir, 'regression_results.json')
