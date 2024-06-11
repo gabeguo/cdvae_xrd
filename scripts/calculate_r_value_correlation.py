@@ -104,8 +104,8 @@ def main(args):
 
     # plot
     plt.plot(unrefined_rws_ordered, refined_rws_ordered, 'o')
-    plt.xlabel('R_w: raw AI generation')
-    plt.ylabel('R_w: after XRD refinement')
+    plt.xlabel('$R_w$: raw AI generation')
+    plt.ylabel('$R_w$: after XRD refinement')
     generic_x_vals = np.linspace(0, max(args.thresh_x, args.thresh_y), 20)
     plt.xlim(0, args.thresh_x)
     plt.ylim(0, args.thresh_y)
