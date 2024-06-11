@@ -19,7 +19,7 @@ def main(args):
                     top_r_values.append(min(r_vals_by_material[material].values()))
     plt.ecdf(top_r_values)
     plt.xlabel('Prediction Error (R-Value)')
-    plt.ylabel("Percentage of Materials At or Below Error Level")
+    plt.ylabel("Percentage of Materials At or Below Prediction Error")
 
     # Thanks https://stackoverflow.com/a/58675407
     major_tick_spacing = 0.2
