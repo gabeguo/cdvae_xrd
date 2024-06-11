@@ -18,8 +18,8 @@ def main(args):
                 else:
                     top_r_values.append(min(r_vals_by_material[material].values()))
     plt.ecdf(top_r_values)
-    plt.xlabel('R values')
-    plt.ylabel("proportion at or below")
+    plt.xlabel('Prediction Error (R-Value)')
+    plt.ylabel("Percentage of Materials At or Below Error Level")
 
     # Thanks https://stackoverflow.com/a/58675407
     major_tick_spacing = 0.2
@@ -28,6 +28,8 @@ def main(args):
     minor_tick_spacing = 0.05
     plt.gca().xaxis.set_minor_locator(ticker.MultipleLocator(minor_tick_spacing))
     plt.gca().yaxis.set_minor_locator(ticker.MultipleLocator(minor_tick_spacing))
+    plt.yticks(ticks=plt.yticks()[0], 
+               labels=[f"{int(y * 100)}%" for y in plt.yticks()[0]])
 
     # set axis limits
     plt.xlim(0, max(top_r_values))
