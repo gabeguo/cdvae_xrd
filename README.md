@@ -6,6 +6,20 @@ All code blocks assume you start from this directory.
 
 Much thanks to [CDVAE](https://github.com/txie-93/cdvae).
 
+## Visualization of Process
+
+<p><b>Li<sub>2</sub>V<sub>2</sub>F<sub>12</sub></b></p>
+<p align="center">
+    <img src="assets/sincVsSmoothed3.png" height=200/>
+    <img src="assets/material3.gif" height=200 loop=infinite>
+</p>
+
+<p><b>Tm<sub>6</sub>Sc<sub>2</sub></b></p>
+<p align="center">
+    <img src="assets/sincVsSmoothed4.png" height=200/>
+    <img src="assets/material4.gif" height=200 loop=infinite>
+</p>
+
 ## Requirements
 
 Use Python 3.9.18.
