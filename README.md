@@ -180,6 +180,7 @@ This should take less than an hour.
 cd scripts
 python calculate_xrd_patterns_post_hoc.py
 python calculate_r_factor_post_hoc.py
+bash calc_r_value_distribution.sh
 ```
 
 ### Calculating Results by Crystal System
