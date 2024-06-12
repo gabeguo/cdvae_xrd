@@ -57,7 +57,7 @@ def get_desired_candidates(curated_candidates_folder, sinc_level):
         curr_material_folder = os.path.join(curated_candidates_folder, curr_material)
         found = False
         for the_filename in os.listdir(curr_material_folder):
-            if f'pred_sinc{sinc_level}' in the_filename:
+            if f'pred_sinc{sinc_level}_' in the_filename:
                 candidate_num = int(the_filename.split('_')[3][len('candidate'):])
                 # print('\tcandidate', candidate_num)
                 materialNum_to_candidateNum[material_num] = candidate_num
