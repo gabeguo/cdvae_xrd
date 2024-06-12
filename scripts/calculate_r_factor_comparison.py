@@ -25,6 +25,7 @@ def main(args):
     process_refined_dir(args)
     sinc_r_values, refined_r_values = calc_all_r_factors(args)
     plot_r_values(args, sinc_r_values, refined_r_values)
+    save_r_values(args, sinc_r_values, refined_r_values)
     return
 
 def process_unrefined_dir(args):
@@ -90,7 +91,7 @@ def process_refined_dir(args):
     return
 
 def calc_all_r_factors(args):
-    print('calculating r factors')
+    #print('calculating r factors')
     # find Qs
     Qs, _ = create_sinc_filter(
         wave_source=WAVE_SOURCE, 
@@ -124,7 +125,7 @@ def calc_all_r_factors(args):
             pred_xrd = torch.load(os.path.join(args.output_dir, curr_pred_filename))
 
             r = calc_r_factor(gt_xrd=gt_xrd, pred_xrd=pred_xrd, Qs=Qs)
-            print(f"\t{curr_gt_filename}: r = {r:.3f}")
+            #print(f"\t{curr_gt_filename}: r = {r:.3f}")
 
             material_num = int(curr_gt_filename.split('_')[0])
             material_to_r[material_num] = r
@@ -173,6 +174,17 @@ def plot_r_values(args, sinc_r_values, refined_r_values):
     plt.savefig(plot_filepath.replace('.pdf', '.png'), dpi=300)
     plt.close()
 
+    return
+
+def save_r_values(args, sinc_r_values, refined_r_values):
+    with open(os.path.join(args.output_dir, 'r_value_comparison.json'), 'w') as fout:
+        results = {
+            'pre-refinement r-value (mean)': np.mean(sinc_r_values),
+            'pre-refinement r-value (std)': np.std(sinc_r_values),
+            'post-refinement r-value (mean)': np.mean(refined_r_values),
+            'post-refinement r-value (std)': np.std(refined_r_values)
+        }
+        json.dump(results, fout, indent=4)
     return
 
 if __name__ == "__main__":
