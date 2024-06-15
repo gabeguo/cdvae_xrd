@@ -1,12 +1,12 @@
 python -W ignore conditional_generation.py \
-    --model_path /home/gabeguo/hydra/singlerun/2024-04-07/mp_20_sincSmooth100 \
+    --model_path /home/gabeguo/hydra/singlerun/2024-04-23/mp_20_moka \
     --num_starting_points 100 \
     --num_candidates 5 \
     --lr 0.1 \
     --min_lr 1e-4 \
     --l2_penalty 2e-4 \
     --num_tested_materials 200 \
-    --label _sinc100_ \
+    --label _moka_sinc100_ \
     --num_gradient_steps 5000 \
     --num_atom_lambda 0.1 \
     --n_step_each 100 \
@@ -14,4 +14,5 @@ python -W ignore conditional_generation.py \
     --l1_loss \
     --r_min 0 \
     --r_max 30 \
+    --wave_source MoKa \
     --output_dir paper_results_PRELIM

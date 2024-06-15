@@ -55,15 +55,6 @@ def gen_xrd(args):
 
             parser = CifParser.from_string(cif)
             structure = parser.get_structures()[0]
-
-            # crystal = Structure.from_str(cif, fmt='cif')
-            # crystal = crystal.get_primitive_structure()
-            # structure = Structure(
-            #     lattice=Lattice.from_parameters(*crystal.lattice.parameters),
-            #     species=crystal.species,
-            #     coords=crystal.frac_coords,
-            #     coords_are_cartesian=False,
-            # )
             
             # important to use the conventional structure to ensure
             # that peaks are labelled with the conventional Miller indices

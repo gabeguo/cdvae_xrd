@@ -21,13 +21,13 @@ from torch.distributions import MultivariateNormal
 
 
 from eval_utils import load_model
-from cdvae.common.data_utils import get_scaler_from_data_list
+from cdvae.common.data_utils import get_scaler_from_data_list, build_crystal, build_crystal_graph
 from visualization.visualize_materials import create_materials, plot_material_single, plot_xrd_single
 from compute_metrics import Crystal, RecEval, GenEval
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts
 
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.io.cif import CifWriter
+from pymatgen.io.cif import CifWriter, CifParser
 
 import wandb
 
@@ -38,6 +38,16 @@ AVG_XRD_MSE = 'Scaled XRD mean squared error'
 AVG_XRD_L1 = 'Scaled XRD mean absolute error'
 BEST_XRD_MSE = 'Average best scaled XRD mean squared error among candidates'
 BEST_XRD_L1 = 'Average best scaled XRD mean absolute error among candidates'
+AVG_PDF_CORRELATION = "Average Pearson's correlation coefficient between PDFs"
+BEST_PDF_CORRELATION = "Mean best Pearson's correlation coefficient between PDFs"
+STD_PDF_CORRELATION = "Std of Pearson's correlation coefficieint between PDFs"
+STD_BEST_PDF_CORRELATION = "Std of best Pearson's correlation coefficient between PDFs"
+PDF_CORRELATIONS = "All PDF correlations"
+AVG_R_FACTOR = 'Average r factor'
+BEST_R_FACTOR = 'Best r factor'
+STD_R_FACTOR = 'Std of r factors'
+STD_BEST_R_FACTOR = 'Std of best r factors'
+R_FACTORS = "All r factors"
 
 MATCH_RATE = 'match_rate'
 RMS_DIST = 'rms_dist'
@@ -45,6 +55,7 @@ COMPOSITION_VALIDITY = 'comp_valid'
 STRUCTURE_VALIDITY = 'struct_valid'
 VALIDITY = 'valid'
 NUM_ATOM_ACCURACY = '% materials w/ # atoms pred correctly'
+PDF_CORRELATION = "pearson's r between PDFs"
 
 USE_ALL_SPACEGROUPS = "aggregated stats (all spacegroups)"
 COUNT = "number of crystals"
@@ -135,6 +146,86 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, Qs, savepath)
 
     return    
 
+def point_pdf_query(Qs, signal, r):
+    ret_val = 0
+    assert np.isclose(np.mean(signal), 1)
+    delta_Q = (Qs[-1] - Qs[0]) / (Qs.shape[0] - 1)
+    assert np.isclose(delta_Q, Qs[1] - Qs[0])
+    for i in range(len(signal)):
+        q = Qs[i]
+        s_q = signal[i]
+        ret_val += 2 / np.pi * q * (s_q - 1) * np.sin(q * r) * delta_Q
+    return ret_val
+
+def overall_pdf(Qs, signal, r_min=0, r_max=25, num_samples=1000):
+    assert Qs.shape == signal.shape
+    signal = signal / np.mean(signal)
+    rs = np.linspace(r_min, r_max, num_samples)
+    the_pdf = list()
+    for r in rs:
+        the_pdf.append(point_pdf_query(Qs=Qs, signal=signal, r=r))
+    return np.array(rs), np.array(the_pdf)
+
+def calc_r_factor(gt_xrd, pred_xrd, Qs):
+    delta_Q = (Qs[-1] - Qs[0]) / (Qs.shape[0] - 1)
+    assert np.isclose(delta_Q, Qs[1] - Qs[0])
+    assert np.isclose(delta_Q, Qs[-1] - Qs[-2])
+    if isinstance(gt_xrd, torch.Tensor):
+        gt_xrd = gt_xrd.squeeze().detach().cpu().numpy()
+    if isinstance(pred_xrd, torch.Tensor):
+        pred_xrd = pred_xrd.squeeze().detach().cpu().numpy()
+    assert np.isclose(np.max(gt_xrd), 1)
+    assert np.isclose(np.max(pred_xrd), 1)
+    assert np.min(gt_xrd) >= 0
+    assert np.min(pred_xrd) >= 0
+    numerator = np.sum(delta_Q * (gt_xrd - pred_xrd)**2)
+    denominator = np.sum(delta_Q * gt_xrd**2)
+    return numerator / denominator
+
+def calc_and_plot_pdf_correlation(args, gt_xrd, pred_xrd, Qs, save_dir):
+    # plot XRD
+    if isinstance(gt_xrd, torch.Tensor):
+        gt_xrd = gt_xrd.squeeze().detach().cpu().numpy()
+    if isinstance(pred_xrd, torch.Tensor):
+        pred_xrd = pred_xrd.squeeze().detach().cpu().numpy()
+    assert gt_xrd.shape == pred_xrd.shape
+    plt.plot(Qs, gt_xrd, alpha=0.8, label='GT XRD (noiseless)')
+    plt.plot(Qs, pred_xrd, alpha=0.8, label='Pred XRD (noiseless)')
+    plt.xlabel(r'$Q (\mathring A^{-1})$')
+    plt.ylabel("Scaled Intensity")
+    plt.title('XRD patterns')
+    plt.grid()
+    plt.legend()
+    plt.savefig(os.path.join(save_dir, 'xrd_comparison.png'))
+    plt.savefig(os.path.join(save_dir, 'xrd_comparison.pdf'))
+    plt.close()
+    # create PDF
+    gt_rs, gt_pdf = overall_pdf(Qs=Qs, signal=gt_xrd, r_min=args.r_min, r_max=args.r_max)
+    pred_rs, pred_pdf = overall_pdf(Qs=Qs, signal=pred_xrd, r_min=args.r_min, r_max=args.r_max)
+    assert np.array_equal(gt_rs, pred_rs)
+    # plot PDF
+    plt.plot(gt_rs, gt_pdf, alpha=0.8, label='GT PDF')
+    plt.plot(pred_rs, pred_pdf, alpha=0.8, label='Pred PDF')
+    plt.xlabel(r'$r (\mathring A)$')
+    plt.ylabel("G(r)")
+    # save PDF torch
+    torch.save(torch.from_numpy(gt_pdf), os.path.join(save_dir, 'gt_pdf.pt'))
+    torch.save(torch.from_numpy(pred_pdf), os.path.join(save_dir, 'pred_pdf.pt'))
+    # calculate correlation coefficient
+    correlation_matrix = np.corrcoef(gt_pdf, pred_pdf)
+    pearson_r = correlation_matrix[0, 1]
+    assert np.isclose(correlation_matrix[0, 1], correlation_matrix[1, 0])
+    assert np.isclose(correlation_matrix[0, 0], 1) and np.isclose(correlation_matrix[1, 1], 1)
+    # save PDF image
+    plt.title(f"Pair Distribution Function Comparison\n(Pearson's r = {pearson_r:.3f})")
+    plt.grid()
+    plt.legend()
+    plt.savefig(os.path.join(save_dir, 'pdf_comparison.png'))
+    plt.savefig(os.path.join(save_dir, 'pdf_comparison.pdf'))
+    plt.close()
+    # return
+    return pearson_r
+
 # Thanks ChatGPT!
 def resize_image_to_same_width(image, width):
     """Resize an image to the same width, maintaining the aspect ratio."""
@@ -181,12 +272,19 @@ def calculate_accuracy(probabilities, labels):
     
     return accuracy.item()  # Convert to Python float for readability
 
-def optimize_latent_code(args, model, batch, target_noisy_xrd):
+def optimize_latent_code(args, model, batch, target_noisy_xrd, z_init=None):
     m = MultivariateNormal(torch.zeros(model.hparams.hidden_dim).cuda(), 
                            torch.eye(model.hparams.hidden_dim).cuda())
     
-    z = torch.randn(args.num_starting_points, model.hparams.hidden_dim,
+    if z_init is None:
+        assert args.start_from_init is None
+        print('random z')
+        z = torch.randn(args.num_starting_points, model.hparams.hidden_dim,
                     device=model.device)
+    else:
+        print(f'init z from pre-existing: {args.start_from_init}')
+        z = z_init.detach()
+        assert z.shape == (args.num_starting_points, model.hparams.hidden_dim)
     
     z.requires_grad = True
     opt = Adam([z], lr=args.lr)
@@ -243,27 +341,24 @@ def optimize_latent_code(args, model, batch, target_noisy_xrd):
 def process_candidates(args, xrd_args, j,
         curr_gen_crystals_list, all_opt_coords, all_opt_atom_types, 
         opt_generated_xrds, 
-        min_loss_indices, opt_material_folder, opt_xrd_folder, pred_opt_xrd_folder, opt_cif_folder, metrics_folder, subdir,
+        min_loss_indices, 
+        curr_material_folder, 
         all_bestPred_crystals,
+        gt_noiseless_xrd,
         target_noisy_xrd, final_pred_xrds, 
         opt_sinc_only_xrds, noiseless_generated_xrds,
         curr_gt_crystal, gt_atom_types,
         gt_material_filepath, gt_xrd_filepath,
         all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms,
-        Qs):
-
-    opt_material_folder_cand = f'{opt_material_folder}/{subdir}'
-    opt_xrd_folder_cand = f'{opt_xrd_folder}/{subdir}'
-    pred_opt_xrd_folder_cand = f'{pred_opt_xrd_folder}/{subdir}'
-    opt_cif_folder_cand = f'{opt_cif_folder}/{subdir}'
-    for the_folder in [opt_material_folder_cand, opt_xrd_folder_cand, opt_cif_folder_cand, pred_opt_xrd_folder_cand]:
-        os.makedirs(the_folder, exist_ok=True) 
+        all_pdf_correlations, all_r_factors, Qs):
 
     candidate_xrd_l1_errors = list()
     candidate_xrd_l2_errors = list()
     candidate_match_status = list()
     candidate_composition_errors = list()
     candidate_has_correct_num_atoms = list()
+    candidate_pdf_correlations = list()
+    candidate_r_factors = list()
 
     print(f'crystal {j} has {len(min_loss_indices)} candidates')
     best_rms_dist = 1e6
@@ -277,19 +372,27 @@ def process_candidates(args, xrd_args, j,
         opt_xrd = opt_generated_xrds[min_loss_idx, :].cpu().numpy()
         curr_pred_crystal = Crystal(curr_gen_crystals_list[min_loss_idx])
 
-        # TODO: fix xrd plotting
+        curr_candidate_folder = os.path.join(curr_material_folder, 'pred', f'candidate{i}') 
         # save the optimal crystal and its xrd
+        opt_material_folder_cand = os.path.join(curr_candidate_folder, 'visUnitCell')
+        os.makedirs(opt_material_folder_cand, exist_ok=True)
         pred_material_filepath = plot_material_single(opt_coords, opt_atom_types, opt_material_folder_cand, idx=j, filename=filename)
+        opt_xrd_folder_cand = os.path.join(curr_candidate_folder, 'xrd_opt_gen')
+        os.makedirs(opt_xrd_folder_cand, exist_ok=True)
         pred_xrd_filepath = plot_xrd_single(xrd_args, opt_xrd, opt_xrd_folder_cand, idx=j, filename=filename, x_axis=Qs, 
                                             x_label=r'Q $({A^{\circ}}^{-1})$')
         torch.save(opt_generated_xrds[min_loss_idx, :], os.path.join(opt_xrd_folder_cand, f'candidate_{i}.pt'))
+        pred_opt_xrd_folder_cand = os.path.join(curr_candidate_folder, 'xrd_ml_pred')
+        os.makedirs(pred_opt_xrd_folder_cand, exist_ok=True)
         pred_opt_xrd_filepath = plot_xrd_single(xrd_args, final_pred_xrds[min_loss_idx].detach().cpu().numpy(), 
                                                 pred_opt_xrd_folder_cand, idx=j, 
                                                 filename=filename, x_axis=Qs,
                                                 x_label=r'Q $({A^{\circ}}^{-1})$')
         torch.save(final_pred_xrds[min_loss_idx].detach(), os.path.join(pred_opt_xrd_folder_cand, f'candidate_{i}.pt'))
+        opt_cif_folder_cand = os.path.join(curr_candidate_folder, 'cif')
+        os.makedirs(opt_cif_folder_cand, exist_ok=True)
         curr_pred_crystal.structure.to(filename=f'{opt_cif_folder_cand}/noSpacegroup_material{j}_candidate{i}.cif', fmt='cif')
-        pred_cif_writer = CifWriter(curr_pred_crystal.structure, symprec=0.1)
+        pred_cif_writer = CifWriter(curr_pred_crystal.structure, symprec=0.01)
         pred_cif_writer.write_file(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif')
 
         # Log image
@@ -332,15 +435,28 @@ def process_candidates(args, xrd_args, j,
             prediction_nn=final_pred_xrds[min_loss_idx].detach().cpu().numpy(),
             prediction_simulated=opt_xrd,
             Qs=Qs,
-            savepath=f'{opt_xrd_folder_cand}/candidate_{i}_overlaidXRD.png')
+            savepath=f'{opt_xrd_folder_cand}/overlaidXRD.png')
      
         # plot smoothed vs sinc: opt
         plot_smoothed_vs_sinc(smoothed=the_curr_opt_generated_xrd, 
                                 sincPattern=opt_sinc_only_xrds[min_loss_idx], 
                                 noiselessPattern=noiseless_generated_xrds[min_loss_idx],
                                 Qs=Qs,
-                                savepath=os.path.join(opt_xrd_folder, subdir, f'candidate_{i}_sincVsSmoothed.png'))
+                                savepath=os.path.join(opt_xrd_folder_cand, f'sincVsSmoothed.png'))
     
+        # compare and pair distribution functions
+        opt_pdf_folder_cand = os.path.join(curr_candidate_folder, 'pdf')
+        os.makedirs(opt_pdf_folder_cand, exist_ok=True)
+        pdf_correlation = calc_and_plot_pdf_correlation(args=args,
+                                                        gt_xrd=gt_noiseless_xrd, 
+                                                        pred_xrd=noiseless_generated_xrds[min_loss_idx],
+                                                        Qs=Qs,
+                                                        save_dir=opt_pdf_folder_cand)
+        candidate_pdf_correlations.append(pdf_correlation)
+        print(f"pdf correlation: {pdf_correlation}")
+        r_factor = calc_r_factor(gt_xrd=gt_noiseless_xrd, pred_xrd=noiseless_generated_xrds[min_loss_idx], Qs=Qs)
+        candidate_r_factors.append(r_factor)
+        print(f"r factor: {r_factor}")
     # Log the crystal with lowest RMS dist
     all_bestPred_crystals.append(best_crystal)
 
@@ -349,9 +465,17 @@ def process_candidates(args, xrd_args, j,
         AVG_XRD_L1: np.mean(candidate_xrd_l1_errors),
         BEST_XRD_MSE: np.min(candidate_xrd_l2_errors),
         BEST_XRD_L1: np.min(candidate_xrd_l1_errors),
-        MATCH_RATE: candidate_match_status
+        MATCH_RATE: candidate_match_status,
+        AVG_PDF_CORRELATION: np.mean(candidate_pdf_correlations),
+        BEST_PDF_CORRELATION: np.max(candidate_pdf_correlations),
+        AVG_R_FACTOR: np.mean(candidate_r_factors),
+        BEST_R_FACTOR: np.max(candidate_r_factors),
+        PDF_CORRELATIONS: candidate_pdf_correlations,
+        R_FACTORS: candidate_r_factors
     }
 
+    metrics_folder = os.path.join(curr_material_folder, 'metrics')
+    os.makedirs(metrics_folder, exist_ok=True)
     with open(f'{metrics_folder}/material{j}.json', 'w') as fout:
         json.dump(curr_material_metrics, fout, indent=4)
     print(json.dumps(curr_material_metrics, indent=4))
@@ -360,13 +484,50 @@ def process_candidates(args, xrd_args, j,
     all_xrd_l2_errors.append(candidate_xrd_l2_errors)
     all_composition_errors.append(candidate_composition_errors)
     has_correct_num_atoms.append(candidate_has_correct_num_atoms)
+    all_pdf_correlations.append(candidate_pdf_correlations)
+    all_r_factors.append(candidate_r_factors)
 
     wandb.finish() 
     return
 
+def write_histogram(values, save_folder, title, xlabel, ylabel, standard_range=True):
+    plt.grid()
+    if standard_range:
+        plt.xticks(np.linspace(0, 1, 11))
+        plt.xlim(0, 1)
+        bins = np.linspace(0, 1, 21)
+    else:
+        plt.xticks(np.linspace(int(np.min(values)), int(np.max(values)), 11))
+        plt.xlim(int(np.min(values)), int(np.max(values)))
+        bins = np.linspace(int(np.min(values)), int(np.max(values)), 21)
+    plt.hist(values, density=True, cumulative=True, bins=bins)
+    plt.yticks(np.linspace(0, 1, 11))
+    plt.ylim(0, 1)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_folder, f'{title}.png'))
+    plt.savefig(os.path.join(save_folder, f'{title}.pdf'))
+    plt.close()
+
+    return
+
+def write_pdf_histogram(pdf_rs, save_folder, title):
+    xlabel = "Pearson's Correlation (r) between Predicted and GT PDFs"
+    ylabel = "Cumulative Density\n(% of Materials at or below r)"
+    write_histogram(values=pdf_rs, save_folder=save_folder, title=title, xlabel=xlabel, ylabel=ylabel)
+    return
+
+def write_r_factor_histogram(r_factors, save_folder, title):
+    xlabel = "R-Factor (Residuals Function) between\nPredicted and GT XRDs (Noiseless)"
+    ylabel = "Cumulative Density\n(% of Materials at or below R)"
+    write_histogram(values=r_factors, save_folder=save_folder, title=title, xlabel=xlabel, ylabel=ylabel, standard_range=False)
+    return
+
 def create_xrd_args(args):
     alt_args = SimpleNamespace()
-    alt_args.wave_source = 'CuKa'
+    alt_args.wave_source = args.wave_source
     alt_args.num_materials = args.num_starting_points
     alt_args.xrd_vector_dim = 4096
     alt_args.max_theta = 180
@@ -433,6 +594,57 @@ def plot_filter(filter, Qs, filter_viz_folder, nanomaterial_size):
     plt.savefig(f'{filter_viz_folder}/filter_spatial.pdf')
     plt.close()
 
+def create_z_from_init(args, batch, model, cif_path):
+    batch = batch.clone() # do not do the overwriting
+    assert os.path.exists(cif_path), f'{cif_path} does not exist'
+
+    with open(cif_path, 'r') as fin:
+        cif_str = ''.join(fin.readlines())
+        crystal = build_crystal(cif_str)
+        frac_coords, atom_types, lengths, angles, edge_indices, to_jimages, num_atoms = \
+            build_crystal_graph(crystal)
+
+    batch.frac_coords = torch.Tensor(frac_coords).to(device=batch.frac_coords.device)
+    batch.atom_types = torch.LongTensor(atom_types).to(device=batch.atom_types.device)
+    batch.lengths = torch.Tensor(lengths).view(1, -1).to(device=batch.lengths.device)
+    batch.angles = torch.Tensor(angles).view(1, -1).to(device=batch.angles.device)
+    batch.edge_index = torch.LongTensor(edge_indices.T).contiguous().to(device=batch.edge_index.device)
+    batch.to_jimages = torch.LongTensor(to_jimages).to(device=batch.to_jimages.device)
+    batch.num_atoms = torch.tensor([num_atoms]).to(device=batch.num_atoms.device)
+    batch.num_bonds = torch.tensor([edge_indices.shape[0]]).to(device=batch.num_bonds.device)
+
+    mu, log_var, z = model.encode(batch)
+    assert mu.shape == (1, model.hparams.hidden_dim), f"actually, mu's shape is: {mu.shape}"
+    assert log_var.shape == (1, model.hparams.hidden_dim), f"actually, log_var's shape is: {log_var.shape}"
+    assert z.shape == (1, model.hparams.hidden_dim), f"actually, z's shape is: {z.shape}"
+    mu = mu.repeat(args.num_starting_points, 1)
+    log_var = log_var.repeat(args.num_starting_points, 1)
+    z = model.reparameterize(mu, log_var)
+    assert z.shape == (args.num_starting_points, model.hparams.hidden_dim)
+
+    return z
+
+    # data = Data(
+    #     frac_coords=torch.Tensor(frac_coords),
+    #     atom_types=torch.LongTensor(atom_types),
+    #     lengths=torch.Tensor(lengths).view(1, -1),
+    #     angles=torch.Tensor(angles).view(1, -1),
+    #     edge_index=torch.LongTensor(
+    #         edge_indices.T).contiguous(),  # shape (2, num_edges)
+    #     to_jimages=torch.LongTensor(to_jimages),
+    #     num_atoms=num_atoms,
+    #     num_bonds=edge_indices.shape[0],
+    #     spacegroup=data_dict['spacegroup.number'],
+    #     pretty_formula=data_dict['pretty_formula'],
+    #     mpid=data_dict['mp_id'],
+    #     num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
+    #     y=prop,
+    #     raw_sinc=raw_sinc,
+    #     raw_sinc_presubsample=raw_sinc_presubsample,
+    #     xrd_presubsample=xrd_presubsample,
+    #     raw_xrd=torch.tensor(data_dict['rawXRD'])
+    # )
+
 def optimization(args, model, ld_kwargs, data_loader):
     assert data_loader is not None
     
@@ -447,18 +659,8 @@ def optimization(args, model, ld_kwargs, data_loader):
     with open(os.path.join(base_output_dir, 'parameters.json'), 'w') as fout:
         json.dump(vars(args), fout, indent=4)
 
-    opt_material_folder = f'{base_output_dir}/opt_material'
-    opt_xrd_folder = f'{base_output_dir}/opt_xrd'
-    pred_opt_xrd_folder = f'{base_output_dir}/pred_opt_xrd'
-    opt_cif_folder = f'{base_output_dir}/opt_cif'
-    gt_material_folder = f'{base_output_dir}/base_truth_material'
-    gt_xrd_folder = f'{base_output_dir}/base_truth_xrd'
-    gt_cif_folder = f'{base_output_dir}/base_truth_cif'
     filter_viz_folder = f'{base_output_dir}/filter_viz'
-    metrics_folder = f'{base_output_dir}/metrics'
-    for the_folder in [opt_material_folder, opt_xrd_folder, opt_cif_folder, 
-                       gt_material_folder, gt_xrd_folder, gt_cif_folder, metrics_folder, filter_viz_folder]:
-        os.makedirs(the_folder, exist_ok=True)
+    os.makedirs(filter_viz_folder, exist_ok=True)
 
     # visualize filter and transform
     if args.xrd_filter == 'sinc' or args.xrd_filter == 'both':
@@ -474,6 +676,8 @@ def optimization(args, model, ld_kwargs, data_loader):
     all_xrd_l1_errors = list()
     all_xrd_l2_errors = list()
     has_correct_num_atoms = list()
+    all_pdf_correlations = list()
+    all_r_factors = list()
 
     spacegroups = list()
     formula_strs = list()
@@ -482,7 +686,8 @@ def optimization(args, model, ld_kwargs, data_loader):
     for j, batch in enumerate(data_loader):
         if j < args.first_idx:
             continue
-        wandb.init(config=args, project='new conditional generation', name=f'crystal {j}', group=args.label)
+        wandb.init(mode="disabled")
+        # wandb.init(config=args, project='new conditional generation', name=f'crystal {j}', group=args.label)
         if j == args.num_tested_materials:
             break
         batch = batch.to(model.device)
@@ -490,6 +695,9 @@ def optimization(args, model, ld_kwargs, data_loader):
         spacegroups.append(int(batch.spacegroup[0]))
         formula_strs.append(batch.pretty_formula[0])
         mpids.append(batch.mpid[0])
+
+        curr_material_folder = f'{base_output_dir}/material{j}_{mpids[-1]}_{formula_strs[-1]}'
+        os.makedirs(curr_material_folder, exist_ok=True)
         
         # get xrd
         assert data_loader.dataset.n_postsubsample == 512
@@ -498,7 +706,15 @@ def optimization(args, model, ld_kwargs, data_loader):
 
         raw_sinc = batch.raw_sinc.reshape(1, 512)
         gt_noiseless_xrd = batch.raw_xrd.reshape(1, 512)
-        z = optimize_latent_code(args=args, model=model, batch=batch, target_noisy_xrd=target_noisy_xrd)
+
+        if args.start_from_init:
+            init_material_folder = f'{args.start_from_init}/material{j}_{mpids[-1]}_{formula_strs[-1]}'
+            cif_path = os.path.join(init_material_folder, 'pred', 'candidate0', 'cif', f'noSpacegroup_material{j}_candidate0.cif')
+            z_init = create_z_from_init(args, batch, model, cif_path)
+        else:
+            z_init = None
+        z = optimize_latent_code(args=args, model=model, batch=batch, 
+                                 target_noisy_xrd=target_noisy_xrd, z_init=z_init)
 
         # get predicted xrd for all optimized candidates
         final_pred_xrds = model.fc_property(z).reshape(-1, 512)
@@ -510,8 +726,11 @@ def optimization(args, model, ld_kwargs, data_loader):
         print('know atom types:', init_atom_types is not None)
         
         crystals = model.langevin_dynamics(z, ld_kwargs, gt_num_atoms=init_num_atoms, gt_atom_types=init_atom_types)
-        crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
-
+        if not args.save_traj:
+            crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles']}
+        else:
+            crystals = {k: crystals[k] for k in ['frac_coords', 'atom_types', 'num_atoms', 'lengths', 'angles',
+                                                 'all_frac_coords', 'all_atom_types']}
         xrd_args = create_xrd_args(args)
             
         # predictions
@@ -522,7 +741,7 @@ def optimization(args, model, ld_kwargs, data_loader):
         angles = crystals['angles']
 
         all_opt_coords, all_opt_atom_types, opt_generated_xrds, curr_gen_crystals_list = create_materials(xrd_args, 
-                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True, symprec=0.1)
+                frac_coords, num_atoms, atom_types, lengths, angles, create_xrd=True, symprec=0.01)
 
         # plot base truth
         frac_coords = batch.frac_coords
@@ -543,12 +762,19 @@ def optimization(args, model, ld_kwargs, data_loader):
         curr_gt_crystal = Crystal(singleton_gt_crystal_list[0])
         all_gt_crystals.append(curr_gt_crystal)
         # save cif
+        gt_cif_folder = os.path.join(curr_material_folder, 'gt', 'cif')
+        os.makedirs(gt_cif_folder, exist_ok=True)
         curr_gt_crystal.structure.to(filename=f'{gt_cif_folder}/noSpacegroup_material{j}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
         # TODO: this will sometimes change the # of atoms in the outputted unit cell in the cif file
         gt_cif_writer = CifWriter(curr_gt_crystal.structure, symprec=0.01)
         gt_cif_writer.write_file(filename=f'{gt_cif_folder}/material{j}_{mpids[-1]}_{formula_strs[-1]}.cif')
-
-        gt_material_filepath = plot_material_single(the_coords, atom_types, gt_material_folder, idx=j)
+        # plot image
+        gt_vis_folder = os.path.join(curr_material_folder, 'gt', 'visUnitCell')
+        os.makedirs(gt_vis_folder, exist_ok=True)
+        gt_material_filepath = plot_material_single(the_coords, atom_types, gt_vis_folder, idx=j)
+        # plot xrd
+        gt_xrd_folder = os.path.join(curr_material_folder, 'gt', 'xrd')
+        os.makedirs(gt_xrd_folder, exist_ok=True)
         gt_xrd_filepath = plot_xrd_single(xrd_args, target_noisy_xrd.squeeze().cpu().numpy(), gt_xrd_folder, 
                                           idx=j, x_axis=downsampled_Qs,
                                           x_label=r'Q $({A^{\circ}}^{-1})$')
@@ -576,23 +802,48 @@ def optimization(args, model, ld_kwargs, data_loader):
         # find the (num_candidates) minimum loss elements
         min_loss_indices = torch.argsort(loss).squeeze(0)[:args.num_candidates].tolist()
 
-        # create material subdir
-        subdir = f'material_{j}_{mpids[-1]}_{formula_strs[-1]}'
+        if args.save_traj:
+            n_steps = args.n_step_each * len(model.sigmas)
+            for item in crystals:
+                print(item)
+            assert crystals['all_frac_coords'].shape[0] == n_steps, f"{crystals['all_frac_coords'].shape[0]} != {n_steps}"
+            assert crystals['all_atom_types'].shape[0] == n_steps, f"{crystals['all_atom_types'].shape[0]} != {n_steps}"
+            print(f'{n_steps} total steps: save traj')
 
+            traj_folder = os.path.join(curr_material_folder, 'pred', 'diffusion_vis')
+            os.makedirs(traj_folder, exist_ok=True)
+
+            for step in range(0, n_steps, args.n_step_each):
+                curr_frac_coords = crystals['all_frac_coords'][step]
+                curr_atom_types = crystals['all_atom_types'][step]
+
+                assert curr_frac_coords.shape == crystals['frac_coords'].shape, f"{curr_frac_coords.shape} != {crystals['frac_coords'].shape}"
+                assert curr_atom_types.shape == crystals['atom_types'].shape, f"{curr_atom_types.shape} != {crystals['atom_types'].shape}"
+
+                curr_step_coords, curr_step_atom_types, curr_step_xrds, curr_step_singleton_crystal_list = \
+                    create_materials(xrd_args, curr_frac_coords, crystals['num_atoms'], curr_atom_types, crystals['lengths'], crystals['angles'], 
+                                     create_xrd=True, symprec=0.01)
+                assert len(curr_step_singleton_crystal_list) == args.num_starting_points
+                curr_step_crystal = Crystal(curr_step_singleton_crystal_list[min_loss_indices[0]]) # just save 1
+
+                # TODO: save these
+                curr_step_crystal.structure.to(filename=f'{traj_folder}/step{step}_material{j}_candidate{0}_{mpids[-1]}_{formula_strs[-1]}.cif', fmt='cif')
+    
         process_candidates(args=args, xrd_args=xrd_args, j=j,
                 curr_gen_crystals_list=curr_gen_crystals_list, 
                 all_opt_coords=all_opt_coords, all_opt_atom_types=all_opt_atom_types, 
                 opt_generated_xrds=opt_generated_xrds, 
                 min_loss_indices=min_loss_indices, 
-                opt_material_folder=opt_material_folder, opt_xrd_folder=opt_xrd_folder, pred_opt_xrd_folder=pred_opt_xrd_folder,
-                opt_cif_folder=opt_cif_folder, metrics_folder=metrics_folder, subdir=subdir,
+                curr_material_folder=curr_material_folder,
                 all_bestPred_crystals=all_bestPred_crystals,
+                gt_noiseless_xrd=gt_noiseless_xrd,
                 target_noisy_xrd=target_noisy_xrd, final_pred_xrds=final_pred_xrds, 
                 opt_sinc_only_xrds=opt_sinc_only_xrds, noiseless_generated_xrds=noiseless_generated_xrds,
                 curr_gt_crystal=curr_gt_crystal, gt_atom_types=atom_types,
                 gt_material_filepath=gt_material_filepath, gt_xrd_filepath=gt_xrd_filepath,
                 all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
                 all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms,
+                all_pdf_correlations=all_pdf_correlations, all_r_factors=all_r_factors,
                 Qs=downsampled_Qs)
 
     ret_val = dict()
@@ -600,19 +851,28 @@ def optimization(args, model, ld_kwargs, data_loader):
         curr_results = calculate_metrics(all_gt_crystals=all_gt_crystals, all_bestPred_crystals=all_bestPred_crystals,
             all_xrd_l1_errors=all_xrd_l1_errors, all_xrd_l2_errors=all_xrd_l2_errors, 
             all_composition_errors=all_composition_errors, has_correct_num_atoms=has_correct_num_atoms,
+            all_pdf_correlations=all_pdf_correlations, all_r_factors=all_r_factors,
             spacegroups=spacegroups, desired_spacegroup=curr_spacegroup)
         ret_val[curr_spacegroup] = curr_results
 
+    metrics_folder = os.path.join(base_output_dir, 'metrics')
+    os.makedirs(metrics_folder, exist_ok=True)
     with open(f'{metrics_folder}/aggregate_metrics.json', 'w') as fout:
         json.dump(ret_val, fout, indent=4)
     
+    write_pdf_histogram(pdf_rs=np.array(all_pdf_correlations).flatten(), save_folder=metrics_folder, title='All Predicted PDFs vs. Ground Truth')
+    write_pdf_histogram(pdf_rs=np.max(np.array(all_pdf_correlations), axis=1), save_folder=metrics_folder, title='Best PDFs (per Material) vs. Ground Truth')
+
+    write_r_factor_histogram(r_factors=np.array(all_r_factors).flatten(), save_folder=metrics_folder, title='All Predicted R-Factors vs. Ground Truth')
+    write_r_factor_histogram(r_factors=np.max(np.array(all_r_factors), axis=1), save_folder=metrics_folder, title='Best R-Factors (per Material) vs. Ground Truth')
+
     print(json.dumps(ret_val, indent=4))
 
     return ret_val
 
 def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
             all_xrd_l1_errors, all_xrd_l2_errors, all_composition_errors, has_correct_num_atoms,
-            spacegroups, desired_spacegroup):
+            all_pdf_correlations, all_r_factors, spacegroups, desired_spacegroup):
     # turn into numpy arrays
     spacegroups = np.array(spacegroups)
     all_gt_crystals = np.array(all_gt_crystals)
@@ -621,6 +881,8 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
     all_xrd_l2_errors = np.array(all_xrd_l2_errors)
     all_composition_errors = np.array(all_composition_errors)
     has_correct_num_atoms = np.array(has_correct_num_atoms)
+    all_pdf_correlations = np.array(all_pdf_correlations)
+    all_r_factors = np.array(all_r_factors)
 
     num_materials_in_spacegroup = len(spacegroups)
     if desired_spacegroup != USE_ALL_SPACEGROUPS:
@@ -634,16 +896,26 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
         all_xrd_l2_errors = all_xrd_l2_errors[index_mask]
         all_composition_errors = all_composition_errors[index_mask]
         has_correct_num_atoms = has_correct_num_atoms[index_mask]
+        all_pdf_correlations = all_pdf_correlations[index_mask]
+        all_r_factors = all_r_factors[index_mask]
 
         num_materials_in_spacegroup = np.sum(index_mask)
 
     # average xrd errors
-    avg_xrd_mse = np.mean(np.array(all_xrd_l2_errors))
-    avg_xrd_l1 = np.mean(np.array(all_xrd_l1_errors))
+    avg_xrd_mse = np.mean(all_xrd_l2_errors)
+    avg_xrd_l1 = np.mean(all_xrd_l1_errors)
+    avg_pdf_correlation = np.mean(all_pdf_correlations)
+    std_pdf_correlation = np.std(all_pdf_correlations)
+    avg_r_factor = np.mean(all_r_factors)
+    std_r_factor = np.std(all_r_factors)
 
     # best of candidate xrd errors
     best_xrd_mse = np.mean([np.min(list) for list in all_xrd_l2_errors])
     best_xrd_l1 = np.mean([np.min(list) for list in all_xrd_l1_errors])
+    best_pdf_correlation = np.mean(np.max(all_pdf_correlations, axis=1))
+    std_best_pdf_correlation = np.std(np.max(all_pdf_correlations, axis=1))
+    best_r_factor = np.mean(np.min(all_r_factors, axis=1)) 
+    std_best_r_factor = np.std(np.min(all_r_factors, axis=1))
 
     ret_val = {
         COUNT: int(num_materials_in_spacegroup),
@@ -651,7 +923,15 @@ def calculate_metrics(all_gt_crystals, all_bestPred_crystals,
         AVG_XRD_MSE: avg_xrd_mse,
         AVG_XRD_L1: avg_xrd_l1,
         BEST_XRD_MSE: best_xrd_mse,
-        BEST_XRD_L1: best_xrd_l1
+        BEST_XRD_L1: best_xrd_l1,
+        AVG_PDF_CORRELATION: avg_pdf_correlation,
+        BEST_PDF_CORRELATION: best_pdf_correlation,
+        STD_PDF_CORRELATION: std_pdf_correlation,
+        STD_BEST_PDF_CORRELATION: std_best_pdf_correlation,
+        AVG_R_FACTOR: avg_r_factor,
+        STD_R_FACTOR: std_r_factor,
+        BEST_R_FACTOR: best_r_factor,
+        STD_BEST_R_FACTOR: std_best_r_factor
     }
 
     ret_val.update(check_structure_match(gt_structures=all_gt_crystals, 
@@ -737,7 +1017,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', default='data', type=str)
     parser.add_argument('--n_step_each', default=100, type=int)
     parser.add_argument('--step_lr', default=1e-4, type=float)
-    parser.add_argument('--save_traj', default=False, type=bool)
+    parser.add_argument('--save_traj', action='store_true')
     parser.add_argument('--min_sigma', default=0, type=float)
     parser.add_argument('--disable_bar', default=False, type=bool)
     parser.add_argument('--start_from', default='data', type=str)
@@ -756,6 +1036,10 @@ if __name__ == '__main__':
     parser.add_argument('--xrd_filter', default='both')
     parser.add_argument('--output_dir', default='materials_viz', type=str)
     parser.add_argument('--first_idx', default=0, type=int)
+    parser.add_argument('--r_min', default=0, type=float)
+    parser.add_argument('--r_max', default=30, type=float)
+    parser.add_argument('--wave_source', default='CuKa', type=str)
+    parser.add_argument('--start_from_init', default=None, type=str)
     args = parser.parse_args()
 
     print('starting eval', args)

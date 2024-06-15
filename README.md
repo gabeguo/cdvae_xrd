@@ -1,162 +1,195 @@
-# Crystal Diffusion Variational AutoEncoder
+# *XRDnet*: *Ab Initio* Nanostructure Solutions from PXRD via Score-Based Generative Modeling
 
-This software implementes Crystal Diffusion Variational AutoEncoder (CDVAE), which generates the periodic structure of materials.
+This is the repository for *XRDnet*, the world's first end-to-end nanostructure solver from powder x-ray diffraction (PXRD) patterns.
 
-It has several main functionalities:
+All code blocks assume you start from this directory.
 
-- Generate novel, stable materials by learning from a dataset containing existing material structures.
-- Generate materials by optimizing a specific property in the latent space, i.e. inverse design.
+Much thanks to [CDVAE](https://github.com/txie-93/cdvae).
 
-[[Paper]](https://arxiv.org/abs/2110.06197) [[Datasets]](data/)
+## Visualization of Process
 
+<p><b>Li<sub>2</sub>V<sub>2</sub>F<sub>12</sub></b></p>
 <p align="center">
-  <img src="assets/illustrative.png" /> 
+    <img src="assets/sincVsSmoothed3.png" height=200/>
+    <img src="assets/material3.gif" height=200 loop=infinite>
 </p>
 
+<p><b>Tm<sub>6</sub>Sc<sub>2</sub></b></p>
 <p align="center">
-  <img src="assets/Tm4Ni4As4.gif" width="200">
+    <img src="assets/sincVsSmoothed4.png" height=200/>
+    <img src="assets/material4.gif" height=200 loop=infinite>
 </p>
 
+## Requirements
 
-## Table of Contents
+Use Python 3.9.18.
 
-- [Installation](#installation)
-- [Datasets](#datasets)
-- [Training CDVAE](#training-cdvae)
-- [Generating materials](#generating-materials)
-- [Evaluating model](#evaluating-model)
-- [Authors and acknowledgements](#authors-and-acknowledgements)
-- [Citation](#citation)
-- [Contact](#contact)
+In our experience, depending on the system, you may have trouble with:
+- [PyTorch Scatter](https://github.com/rusty1s/pytorch_scatter)
+- [PyTorch Sparse](https://github.com/rusty1s/pytorch_sparse)
 
-## Installation
+If so, just follow the instructions on their GitHub repos to install the versions that align with your CUDA version. Here are the suggested ways to do so:
 
-The easiest way to install prerequisites is via [conda](https://conda.io/docs/index.html).
-
-### GPU machines
-
-Run the following command to install the environment:
-```bash
-conda env create -f env.yml
 ```
-Activate the conda environment with `conda activate cdvae`.
-
-Install this package with `pip install -e .`.
-
-### Faster conda installation
-
-We've noticed that the above command to install the dependencies from `env.yml` can take very long. A faster way to install the required packages is:
-```bash
-conda env create -f env_sub.yml
-conda activate cdvae
-conda install ipywidgets jupyterlab matplotlib pylint
-conda install -c conda-forge matminer=0.7.3 nglview pymatgen=2020.12.31
-# Downgrade to fix a known issue with pytorch
-python3 -m pip install setuptools==59.5.0
-pip install -e .
+pip install torch==2.0.0
+pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+pip install torch-sparse -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
 ```
 
-### CPU-only machines
+After that, run the following command to install remaining requirements.
 
-```bash
-conda env create -f env.cpu.yml
-conda activate cdvae
-pip install -e .
+```
+pip install -r requirements.txt
 ```
 
-### Setting up environment variables
-
-Make a copy of the `.env.template` file and rename it to `.env`. Modify the following environment variables in `.env`.
+Setup environment variables by making a copy of the `.env.template` file and rename it to `.env`. Modify the following environment variables in `.env`.
 
 - `PROJECT_ROOT`: path to the folder that contains this repo
 - `HYDRA_JOBS`: path to a folder to store hydra outputs
 - `WABDB`: path to a folder to store wabdb outputs
 
-## Datasets
+Finally, install this package with
+```
+pip install -e .
+``` 
 
-All datasets are directly available on `data/` with train/valication/test splits. You don't need to download them again. If you use these datasets, please consider to cite the original papers from which we curate these datasets.
+## Data Procurement
 
-Find more about these datasets by going to our [Datasets](data/) page.
+### Use Our Data
 
-## Training CDVAE
+See `data/mp_20` for *MP-20-PXRD*, our modification of MP-20 with PXRD patterns (no broadening added).
 
-### Training without a property predictor
+See `data/experimental_data` for the crystal structures with experimentally observed PXRD patterns.
 
-To train a CDVAE, run the following command:
+Despite the filenames, they're not .csv  files (they're pickle files), because the data contains PyTorch tensors.
+
+No action needs to be taken on data, as the scripts automatically load the datasets.
+
+### Generate It Yourself
+
+This is unnecessary, because we already have created and uploaded the datasets for you. However, if you wish to try something new on the MP-20 dataset (let's say, different wavelengths or data splits), you can follow these instructions.
+
+Before running, replace `/home/gabeguo/` in `create_data.sh` with your home directory. This takes less than an hour.
 
 ```
-python cdvae/run.py data=perov expname=perov
+cd scripts
+bash create_data.sh
 ```
 
-To use other datasets, use `data=carbon` and `data=mp_20` instead. CDVAE uses [hydra](https://hydra.cc) to configure hyperparameters, and users can modify them with the command line or configure files in `conf/` folder.
+Data should be saved in `data/mp_20`. 
 
-After training, model checkpoints can be found in `$HYDRA_JOBS/singlerun/YYYY-MM-DD/expname`.
+## Training
 
-### Training with a property predictor
+This trains the $10 &#8491$ and $100 &#8491$ models. They will be saved under `../hydra/singlerun/[today's date]`. 
 
-Users can also additionally train an MLP property predictor on the latent space, which is needed for the property optimization task:
-
-```
-python cdvae/run.py data=perov expname=perov model.predict_property=True
-```
-
-The name of the predicted propery is defined in `data.prop`, as in `conf/data/perov.yaml` for Perov-5.
-
-## Generating materials
-
-To generate materials, run the following command:
+On a single GeForce RTX 3090 (24 GB), each model should take about one day to train.
 
 ```
-python scripts/evaluate.py --model_path MODEL_PATH --tasks recon gen opt
+cd scripts
+CUDA_VISIBLE_DEVICES=x bash train_mp20_model_sinc10.sh
+CUDA_VISIBLE_DEVICES=x bash train_mp20_model_sinc100.sh
 ```
 
-`MODEL_PATH` will be the path to the trained model. Users can choose one or several of the 3 tasks:
+## Evaluation
 
-- `recon`: reconstruction, reconstructs all materials in the test data. Outputs can be found in `eval_recon.pt`l
-- `gen`: generate new material structures by sampling from the latent space. Outputs can be found in `eval_gen.pt`.
-- `opt`: generate new material strucutre by minimizing the trained property in the latent space (requires `model.predict_property=True`). Outputs can be found in `eval_opt.pt`.
+You will have to change `--model_path` inside each script to have the appropriate home directory (rather than `/home/gabeguo/`) and date (rather than `2024-04-07`). 
 
-`eval_recon.pt`, `eval_gen.pt`, `eval_opt.pt` are pytorch pickles files containing multiple tensors that describes the structures of `M` materials batched together. Each material can have different number of atoms, and we assume there are in total `N` atoms. `num_evals` denote the number of Langevin dynamics we perform for each material.
+On a single GeForce RTX 3090 (24 GB), each evaluation (per model) should take about one day to conduct.
 
-- `frac_coords`: fractional coordinates of each atom, shape `(num_evals, N, 3)`
-- `atom_types`: atomic number of each atom, shape `(num_evals, N)`
-- `lengths`: the lengths of the lattice, shape `(num_evals, M, 3)`
-- `angles`: the angles of the lattice, shape `(num_evals, M, 3)`
-- `num_atoms`: the number of atoms in each material, shape `(num_evals, M)`
+### MP-20
 
-## Evaluating model
-
-To compute evaluation metrics, run the following command:
+#### *XRDnet*
 
 ```
-python scripts/compute_metrics.py --root_path MODEL_PATH --tasks recon gen opt
+cd scripts
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_sinc10.sh
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_sinc100.sh
 ```
 
-`MODEL_PATH` will be the path to the trained model. All evaluation metrics will be saved in `eval_metrics.json`.
-
-## Authors and acknowledgements
-
-The software is primary written by [Tian Xie](www.txie.me), with signficant contributions from [Xiang Fu](https://xiangfu.co/).
-
-The GNN codebase and many utility functions are adapted from the [ocp-models](https://github.com/Open-Catalyst-Project/ocp) by the [Open Catalyst Project](https://opencatalystproject.org/). Especially, the GNN implementations of [DimeNet++](https://arxiv.org/abs/2011.14115) and [GemNet](https://arxiv.org/abs/2106.08903) are used.
-
-The main structure of the codebase is built from [NN Template](https://github.com/lucmos/nn-template).
-
-For the datasets, [Perov-5](data/perov_5) is curated from [Perovksite water-splitting](https://cmr.fysik.dtu.dk/cubic_perovskites/cubic_perovskites.html), [Carbon-24](data/carbon_24) is curated from [AIRSS data for carbon at 10GPa](https://archive.materialscloud.org/record/2020.0026/v1), [MP-20](data/mp_20) is curated from [Materials Project](https://materialsproject.org).
-
-## Citation
-
-Please consider citing the following paper if you find our code & data useful.
+#### *Semi-Random Baseline*
 
 ```
-@article{xie2021crystal,
-  title={Crystal Diffusion Variational Autoencoder for Periodic Material Generation},
-  author={Xie, Tian and Fu, Xiang and Ganea, Octavian-Eugen and Barzilay, Regina and Jaakkola, Tommi},
-  journal={arXiv preprint arXiv:2110.06197},
-  year={2021}
-}
+cd scripts
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_random_baseline_sinc10.sh
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_random_baseline_sinc100.sh
 ```
 
-## Contact
+#### *Latent Space Search Baseline*
+```
+cd scripts
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_sinc10_baseline_noOpt.sh
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_sinc100_baseline_noOpt.sh
+```
 
-Please leave an issue or reach out to Tian Xie (txie AT csail DOT mit DOT edu) if you have any questions.
+### Experimentally Collected Data
+
+#### Getting Correct Configs
+
+Your file directory should look something like this:
+```
+cdvae_xrd/
+  ... [some stuff here] ...
+hydra/singlerun/
+  [whatever date you trained model on]/
+    mp_20_sinc10/
+      .hydra/
+        config.yaml
+        hydra.yaml
+        overrides.yaml
+      hparams.yaml
+      ... [other stuff here] ...
+    mp_20_sinc100/
+      ... [same stuff here] ...
+```
+
+Run the following code (assuming you are in `cdvae_xrd`) to create the proper evaluation setup for experimental data:
+```
+cd ../hydra/singlerun/[whatever date you trained model on]
+cp mp_20_sinc10 mp_20_sinc10_EXPERIMENTAL_TEST
+```
+
+Now, go into `mp_20_sinc10_EXPERIMENTAL_TEST/.hydra/config.yaml` and change line 7 to be:
+```
+root_path: ${oc.env:PROJECT_ROOT}/data/experimental_xrd
+```
+from
+~~root_path: ${oc.env:PROJECT_ROOT}/data/mp_20~~
+
+Do exactly the same change for `mp_20_sinc10_experimental/hparams.yaml`.
+
+#### Running the Evals
+
+Again, remember to change `--model_path` inside each script to have the appropriate home directory (rather than `/home/gabeguo/`) and date (rather than `2024-04-07`). 
+
+This should only take a few hours at most, due to there being fewer experimental PXRD patterns.
+
+```
+cd scripts
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_experimental.sh
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_baseline_noOpt.sh
+CUDA_VISIBLE_DEVICES=x bash conditional_generation_random_baseline_experimental.sh
+```
+
+### Getting R-Factors
+
+As before, in the `__main__` part, change the home directory from `/home/gabeguo/` to whatever your home directory is. 
+
+This should take less than an hour.
+
+```
+cd scripts
+python calculate_xrd_patterns_post_hoc.py
+python calculate_r_factor_post_hoc.py
+bash calc_r_value_distribution.sh
+```
+
+### Calculating Results by Crystal System
+
+Reiterating (as you've already guessed), in `extract_results_by_crystal_system.sh`, change the home directory from `/home/gabeguo/` to whatever your home directory is. 
+
+This should take less than an hour.
+
+```
+cd scripts
+bash extract_results_by_crystal_system.sh
+```

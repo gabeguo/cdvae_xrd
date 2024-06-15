@@ -70,7 +70,6 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
             species=curr_crystal['atom_types'], coords=curr_crystal['frac_coords'], coords_are_cartesian=False)
         
 
-        #print(curr_crystal['angles'].tolist())
         curr_coords = list()
         curr_atom_types = list()
 
@@ -86,9 +85,13 @@ def create_materials(args, frac_coords, num_atoms, atom_types, lengths, angles, 
                 warnings.warn(f"Failed to get conventional standard structure for material {i}")
                 conventional_structure = curr_structure
             # Calculate the XRD pattern
-            pattern = xrd_calc.get_pattern(conventional_structure)
-            # Create the XRD tensor
-            xrd_tensor = create_xrd_tensor(args, pattern)
+            try:
+                pattern = xrd_calc.get_pattern(conventional_structure)
+                # Create the XRD tensor
+                xrd_tensor = create_xrd_tensor(args, pattern)
+            except: 
+                warnings.warn(f"Failed to get XRD pattern for material {i}")
+                xrd_tensor = torch.zeros(args.xrd_vector_dim)
             all_xrds.append(xrd_tensor)
         
         all_coords.append(np.array(curr_coords))

@@ -1,8 +1,8 @@
-python -W ignore gen_xrd.py \
+python gen_xrd.py \
     --data_dir /home/gabeguo/cdvae_xrd/data/mp_20_oldSplit/no_xrd \
     --save_dir /home/gabeguo/cdvae_xrd/data/mp_20_oldSplit
 
-python -W ignore split_data.py \
+python split_data.py \
     --init_data_dir /home/gabeguo/cdvae_xrd/data/mp_20_oldSplit \
     --new_data_dir /home/gabeguo/cdvae_xrd/data/mp_20 \
     --train_percent 0.9 \
