@@ -143,10 +143,17 @@ def calc_all_r_factors(args):
     return sinc_r_values, refined_r_values
 
 def plot_r_values(args, sinc_r_values, refined_r_values):
+    plt.rcParams["figure.figsize"] = (6, 6)
+    plt.rc('axes', labelsize=18)
+    plt.rc('xtick', labelsize=14)
+    plt.rc('ytick', labelsize=14)
     # plot
     plt.plot(sinc_r_values, refined_r_values, 'o')
-    plt.xlabel('$R_w$: raw AI generation')
-    plt.ylabel('$R_w$: after XRD refinement')
+    plt.xlabel('$R_{wp}^{2}$: raw AI generation')
+    if args.sinc_level == 100:
+        plt.ylabel("     ")
+    else:
+        plt.ylabel('$R_{wp}^{2}$: after XRD refinement')
     generic_x_vals = np.linspace(0, args.thresh, 20)
     plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.0), np.full_like(generic_x_vals, 0.05), color='darkgreen', alpha=0.2)
     plt.fill_between(generic_x_vals, np.full_like(generic_x_vals, 0.05), np.full_like(generic_x_vals, 0.1), color='palegreen', alpha=0.2)
