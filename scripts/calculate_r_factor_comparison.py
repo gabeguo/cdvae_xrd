@@ -184,12 +184,22 @@ def plot_r_values(args, sinc_r_values, refined_r_values):
     return
 
 def save_r_values(args, sinc_r_values, refined_r_values):
+    super_successful_post_refinement = [x for x in refined_r_values if x < args.super_success_threshold]
+    successful_post_refinement = [x for x in refined_r_values if x < args.success_threshold]
     with open(os.path.join(args.output_dir, 'r_value_comparison.json'), 'w') as fout:
         results = {
             'pre-refinement r-value (mean)': np.mean(sinc_r_values),
             'pre-refinement r-value (std)': np.std(sinc_r_values),
             'post-refinement r-value (mean)': np.mean(refined_r_values),
-            'post-refinement r-value (std)': np.std(refined_r_values)
+            'post-refinement r-value (std)': np.std(refined_r_values),
+            f"number post-refinement r-values under {args.super_success_threshold}": \
+                len(super_successful_post_refinement),
+            f"avg r-value of materials under {args.super_success_threshold} post-refinement": \
+                np.mean(super_successful_post_refinement),
+            f"number post-refinement r-values under {args.success_threshold}": \
+                len(successful_post_refinement),
+            f"avg r-value of materials under {args.success_threshold} post-refinement": \
+                np.mean(successful_post_refinement),
         }
         json.dump(results, fout, indent=4)
     return
@@ -205,6 +215,8 @@ if __name__ == "__main__":
     parser.add_argument('--sinc_level', type=int, 
                         default=10)
     parser.add_argument('--thresh', type=float, default=1.4)
+    parser.add_argument('--super_success_threshold', type=float, default=0.1)
+    parser.add_argument('--success_threshold', type=float, default=0.2)
     args = parser.parse_args()
 
     main(args)
