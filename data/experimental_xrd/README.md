@@ -1,4 +1,4 @@
-Please request the data from [IUCr](https://www.iucr.org/resources/data/databases), as we do not own it.
+Please find the data from [IUCr](https://www.iucr.org/resources/data/databases), as we do not own it.
 
 You want these files, which you can store in a folder called ```experimental_cif```:
 ```
