@@ -1,6 +1,6 @@
 # *XRDnet*: *Ab Initio* Nanostructure Solutions from PXRD via Score-Based Generative Modeling
 
-This is the repository for *XRDnet*, the world's first end-to-end nanostructure solver from powder x-ray diffraction (PXRD) patterns. Associated article: [Ab Initio Structure Solutions from Nanocrystalline Powder Diffraction Data via Deep Generative Modeling](https://arxiv.org/abs/2406.10796).
+This is the repository for *XRDnet*, the world's first end-to-end nanostructure solver from powder x-ray diffraction (PXRD) patterns.
 
 All code blocks assume you start from this directory.
 
@@ -59,15 +59,15 @@ pip install -e .
 
 See `data/mp_20` for *MP-20-PXRD*, our modification of MP-20 with PXRD patterns (no broadening added).
 
-See `data/experimental_data` for instructions on obtaining the crystal structures with experimentally observed PXRD patterns (we do not own them; [IUCr](https://www.iucr.org/resources/data/databases) does).
+See `data/experimental_data` for the crystal structures with experimentally observed PXRD patterns.
 
 Despite the filenames, they're not .csv  files (they're pickle files), because the data contains PyTorch tensors.
 
-No other action needs to be taken on data, as the scripts automatically load the datasets.
+No action needs to be taken on data, as the scripts automatically load the datasets.
 
 ### Generate It Yourself
 
-This is unnecessary for MP-20, because we already have created and uploaded the datasets for you. However, if you wish to try something new on the MP-20 dataset (let's say, different wavelengths or data splits), you can follow these instructions.
+This is unnecessary, because we already have created and uploaded the datasets for you. However, if you wish to try something new on the MP-20 dataset (let's say, different wavelengths or data splits), you can follow these instructions.
 
 Before running, replace `/home/gabeguo/` in `create_data.sh` with your home directory. This takes less than an hour.
 
@@ -192,17 +192,4 @@ This should take less than an hour.
 ```
 cd scripts
 bash extract_results_by_crystal_system.sh
-```
-
-## Citation
-
-If you find the code in this repository helpful, please cite the following:
-
-```
-@article{guo2024diffusion,
-  title={Diffusion Models Are Promising for Ab Initio Structure Solutions from Nanocrystalline Powder Diffraction Data},
-  author={Guo, Gabe and Saidi, Tristan and Terban, Maxwell and Billinge, Simon JL and Lipson, Hod},
-  journal={arXiv preprint arXiv:2406.10796},
-  year={2024}
-}
 ```
