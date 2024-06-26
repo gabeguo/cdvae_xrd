@@ -6,6 +6,9 @@ import os
 import matplotlib.ticker as ticker
 
 def main(args):
+    plt.rc('axes', labelsize=18)
+    plt.rc('xtick', labelsize=14)
+    plt.rc('ytick', labelsize=14)
     all_r_values = [args.r_values_random_json,
                     args.r_values_latentSearch_json, 
                     args.r_values_pxrdnet_json]

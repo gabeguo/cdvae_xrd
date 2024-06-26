@@ -211,12 +211,16 @@ def plot_xrd_single(args, curr_xrd, output_dir, idx, filename=None, x_axis=None,
     if x_axis is None:
         x_axis = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
     plt.figure()
-    plt.plot(x_axis, curr_xrd)
-    plt.xlabel(x_label)
-    plt.ylabel('Scaled Intensity')
+    plt.plot(x_axis, curr_xrd, linewidth=4)
+    # plt.xlabel(x_label)
+    # plt.ylabel('Scaled Intensity')
+    plt.ylim(0, 1)
+    plt.xlim(0, x_axis[-1])
+    plt.grid()
     filename = filename if filename is not None else f'material{idx}.png'
     img_path = os.path.join(output_dir, filename)
-    plt.savefig(img_path)
+    plt.tight_layout()
+    plt.savefig(img_path, dpi=300)
     plt.savefig(img_path.replace('.png', '.pdf'))
     plt.close()
     return img_path

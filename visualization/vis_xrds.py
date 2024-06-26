@@ -56,12 +56,11 @@ def tsne(args, X, Z):
 
     return
 
-def plot_xrds(xrds, output_dir, num_materials):
+def plot_xrds(xrds, output_dir, num_materials, Qs):
     for i in range(min(num_materials, xrds.shape[0])):
         curr_xrd = xrds[i]
         assert curr_xrd.shape == (512,)
-        thetas = [pos * 180 / len(curr_xrd) for pos in range(len(curr_xrd))]
-        plt.plot(thetas, curr_xrd)
+        plt.plot(Qs, curr_xrd)
         plt.savefig(os.path.join(output_dir, f'material{i}.png'))
         plt.close()
     return
@@ -136,17 +135,17 @@ if __name__ == "__main__":
             pred_xrds = pred_xrds.detach().cpu().numpy()
             pred_xrd_dir = os.path.join(args.save_dir, 'pred_xrds')
             os.makedirs(pred_xrd_dir, exist_ok=True)
-            plot_xrds(pred_xrds, output_dir=pred_xrd_dir, num_materials=10)
+            plot_xrds(pred_xrds, output_dir=pred_xrd_dir, num_materials=10, Qs=data_loader.dataset.Qs)
 
             gt_xrds = xrds.detach().cpu().numpy()
             gt_xrd_dir = os.path.join(args.save_dir, 'gt_xrds')
             os.makedirs(gt_xrd_dir, exist_ok=True)
-            plot_xrds(gt_xrds, output_dir=gt_xrd_dir, num_materials=10)
+            plot_xrds(gt_xrds, output_dir=gt_xrd_dir, num_materials=10, Qs=data_loader.dataset.Qs)
 
             sinc_only = sinc_only.detach().cpu().numpy()
             sinc_only_dir = os.path.join(args.save_dir, 'sinc_only')
             os.makedirs(sinc_only_dir, exist_ok=True)
-            plot_xrds(sinc_only, output_dir=sinc_only_dir, num_materials=10)
+            plot_xrds(sinc_only, output_dir=sinc_only_dir, num_materials=10, Qs=data_loader.dataset.Qs)
 
 
         # Z.append(z)

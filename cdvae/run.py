@@ -173,6 +173,7 @@ def main(cfg: omegaconf.DictConfig):
 if __name__ == "__main__":
     from torch_scatter import scatter
     from torch_sparse import SparseTensor
+    torch.cuda.empty_cache()
     tensor = torch.zeros(3, 5).cuda()
     print('moo')
     main()

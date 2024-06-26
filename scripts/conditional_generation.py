@@ -120,27 +120,28 @@ def plot_smoothed_vs_sinc(smoothed, sincPattern, noiselessPattern, Qs, savepath)
 
     # Plot and fill the area under the second curve
     #ax.fill_between(thetas, sincPattern, color="purple", alpha=0.2)
-    ax.plot(Qs, sincPattern, color="indigo", alpha=0.6, label="Sinc (Raw Nanomaterial)")
+    ax.plot(Qs, sincPattern, color="indigo", alpha=0.6, label="Sinc (Nanomaterial)")
 
     # Plot and fill the area under the second curve
-    ax.plot(Qs, noiselessPattern, color="gray", alpha=0.8, label="Noiseless (Ideal Material)")      
+    ax.plot(Qs, noiselessPattern, color="gray", alpha=0.8, label="Raw (Ideal Crystal)")      
 
     # Customizing the plot
-    ax.set_title("XRD Patterns")
-    ax.set_xlabel(r'$Q (\mathring A^{-1})$')
-    ax.set_ylabel("Scaled Intensity")
+    # ax.set_title("XRD Patterns")
+    # ax.set_xlabel(r'$Q (\mathring A^{-1})$')
+    # ax.set_ylabel("Scaled Intensity")
     # ax.set_xlim(0, 180)  # Set x-axis limits
+    ax.set_xlim(Qs[0], Qs[-1])
     ax.set_ylim(0, 1)  # Set y-axis limits
     # ax.set_xticks(np.arange(0, 181, 10))
     # ax.set_xticklabels(ax.get_xticks(), rotation=70)  # Rotate x-axis labels by 70 degrees
     ax.set_yticks(np.arange(0, 1.1, 0.1))  # Set horizontal gridlines every 0.1 from 0 to 1
     ax.grid(True)  # Show gridlines
-    ax.legend()
+    # ax.legend(fontsize='large')
 
     # Display the plot
     #plt.show()
     plt.tight_layout()
-    plt.savefig(savepath)
+    plt.savefig(savepath, dpi=300)
     plt.savefig(savepath.replace('.png', '.pdf'))
     plt.close()
 
