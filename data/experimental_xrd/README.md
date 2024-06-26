@@ -1,6 +1,6 @@
-Please find the data from [IUCr](https://www.iucr.org/resources/data/databases), as we do not own it.
+Data sourced from [IUCr](https://www.iucr.org/resources/data/databases). All rights belong to them and the original authors.
 
-You want these files, which you can store in a folder called ```experimental_cif```:
+We have the following files.
 ```
 av5088sup4.rtv.combined.cif
 br1322Isup2.rtv.combined.cif
@@ -19,10 +19,10 @@ wm2446Isup2.rtv.combined.cif
 wn6225Isup2.rtv.combined.cif
 ```
 
-Then, from this directory, run (with the appropriate changes to the filepaths in ```read_real_xrd.py```):
+Unnecessary to do, but we ran this (with the appropriate changes to the filepaths in ```read_real_xrd.py```), to process the files:
 ```
 cd ../../process_real_xrds
 python read_real_xrd.py
 ```
 
-Now, you should have a subfolder ```cif_files``` and a file ```test.csv``` in this directory.
+That gives us a subfolder ```cif_files``` and a file ```test.csv``` in this directory.
