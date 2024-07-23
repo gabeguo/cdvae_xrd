@@ -8,14 +8,20 @@ sys.path.insert(0,'/home/gabeguo/anaconda3/envs/GSASII/GSAS-II/GSASII')
 import GSASIIscriptable as G2sc
 import GSASIIElem as G2e
 
-def mirror(arr):
+def mirror(arr, neg):
     """
     Returns [-arr[-1], -arr[-2], ... , -arr[0], +arr[0], ... , +arr[-2], +arr[-1]]
     Retval is an odd function
     """
-    ret_val = np.array([-x for x in reversed(arr)] + [+x for x in arr])
+    if neg:
+        reverse_part = [-x for x in reversed(arr)]
+    else:
+        reverse_part = [+x for x in reversed(arr)]
+    
+    ret_val = np.array(reverse_part + [+x for x in arr])
     assert len(ret_val) == 2 * len(arr)
-    assert ret_val[0] == -ret_val[-1]
+    assert abs(ret_val[0]) == abs(ret_val[-1])
+    
     return ret_val
 
 def get_unit_cell_info(cif, atom_names, form_factors, 
@@ -30,6 +36,7 @@ def get_unit_cell_info(cif, atom_names, form_factors,
 
     atomic_numbers = list()
 
+    print(ref_pos_Q)
     resampled_form_factors = {
         atom_names[i]: np.interp(desired_Q, xp=ref_pos_Q, fp=form_factors[:,i])
         for i in range(len(atom_names))
@@ -51,6 +58,8 @@ def get_unit_cell_info(cif, atom_names, form_factors,
         if elem_symbol not in count_by_elem:
             count_by_elem[elem_symbol] = 0
         count_by_elem[elem_symbol] += 1
+
+    print(count_by_elem)
     
     # Calculate the scattering
     f_sq_then_avg = np.zeros_like(desired_Q)
@@ -76,8 +85,8 @@ def sinc_convolve(Q, intensity, reflections, cif, nano_size):
         atom_names=atom_names, form_factors=form_factors, ref_pos_Q=ref_pos_Q, desired_Q=Q)
     
     # TODO: unsure if this is right?
-    avg_f_then_sq = mirror(avg_f_then_sq)
-    sq_f_then_avg = mirror(sq_f_then_avg)
+    avg_f_then_sq = mirror(avg_f_then_sq, neg=False)
+    sq_f_then_avg = mirror(sq_f_then_avg, neg=False)
 
     print(f"N = {N}")
     print(f"<f>^2 = {avg_f_then_sq}")
@@ -89,8 +98,8 @@ def sinc_convolve(Q, intensity, reflections, cif, nano_size):
     assert np.isclose(Q[1] - Q[0], Q[-1]-Q[-2], atol=1e-8)
     assert min(Q) >= 0
     assert abs(min(intensity)) <= 1e-2 * abs(max(intensity))
-    Q = mirror(Q)
-    intensity = mirror(intensity)
+    Q = mirror(Q, neg=True)
+    intensity = mirror(intensity, neg=False)
 
     print(f'len Q, I after: {len(Q)} {len(intensity)}')
 
@@ -109,7 +118,7 @@ def sinc_convolve(Q, intensity, reflections, cif, nano_size):
 
     unscaled_term = convolve(left_conv_term, right_conv_term, mode='same') + non_conv_term
     result = N * avg_f_then_sq * unscaled_term
-    
+
     return result[len(result)//2:]
 
 def twoTheta_to_Q(twoTheta_deg):
@@ -165,7 +174,7 @@ def main():
     nano_intensity = sinc_convolve(Q=even_spaced_Q, intensity=intensity_gridded, reflections=reflections,
                                    cif=cif_file, nano_size=100)
     
-    nano_intensity[even_spaced_Q > 7.5] = np.min(nano_intensity[even_spaced_Q < 7.5])
+    # nano_intensity[even_spaced_Q > 7.5] = np.min(nano_intensity[even_spaced_Q < 7.5])
     nano_intensity = (nano_intensity - np.min(nano_intensity))
     nano_intensity /= np.max(nano_intensity)
 
