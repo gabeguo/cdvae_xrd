@@ -59,19 +59,22 @@ def get_unit_cell_info(cif, atom_names, form_factors,
             count_by_elem[elem_symbol] = 0
         count_by_elem[elem_symbol] += 1
 
-    print(count_by_elem)
-    
-    # Calculate the scattering
-    f_sq_then_avg = np.zeros_like(desired_Q)
-    f_avg_then_sq = np.zeros_like(desired_Q)
-    for curr_elem in count_by_elem:
-        curr_count = count_by_elem[curr_elem]
-        f_sq_then_avg += curr_count / N * resampled_form_factors[curr_elem] ** 2
+    f_avg_then_sq = np.mean(atomic_numbers) ** 2
+    f_sq_then_avg = np.mean([x**2 for x in atomic_numbers])
 
-        for other_elem in count_by_elem:
-            other_count = count_by_elem[other_elem]
-            weight = (curr_count * other_count) / (N**2)
-            f_avg_then_sq += weight * resampled_form_factors[curr_elem] * resampled_form_factors[other_elem]
+    # print(count_by_elem)
+    
+    # # Calculate the scattering
+    # f_sq_then_avg = np.zeros_like(desired_Q)
+    # f_avg_then_sq = np.zeros_like(desired_Q)
+    # for curr_elem in count_by_elem:
+    #     curr_count = count_by_elem[curr_elem]
+    #     f_sq_then_avg += curr_count / N * resampled_form_factors[curr_elem] ** 2
+
+    #     for other_elem in count_by_elem:
+    #         other_count = count_by_elem[other_elem]
+    #         weight = (curr_count * other_count) / (N**2)
+    #         f_avg_then_sq += weight * resampled_form_factors[curr_elem] * resampled_form_factors[other_elem]
 
     return N, f_avg_then_sq, f_sq_then_avg
 
@@ -85,8 +88,8 @@ def sinc_convolve(Q, intensity, reflections, cif, nano_size):
         atom_names=atom_names, form_factors=form_factors, ref_pos_Q=ref_pos_Q, desired_Q=Q)
     
     # TODO: unsure if this is right?
-    avg_f_then_sq = mirror(avg_f_then_sq, neg=False)
-    sq_f_then_avg = mirror(sq_f_then_avg, neg=False)
+    # avg_f_then_sq = mirror(avg_f_then_sq, neg=False)
+    # sq_f_then_avg = mirror(sq_f_then_avg, neg=False)
 
     print(f"N = {N}")
     print(f"<f>^2 = {avg_f_then_sq}")
@@ -112,6 +115,9 @@ def sinc_convolve(Q, intensity, reflections, cif, nano_size):
     # return convolution
 
     left_conv_term = (intensity / (N * avg_f_then_sq) - sq_f_then_avg / avg_f_then_sq)
+
+    # return left_conv_term[len(left_conv_term)//2:]
+
     left_conv_term *= 1 / (2 * np.pi)
     right_conv_term = nano_size * sinc
     non_conv_term = sq_f_then_avg / avg_f_then_sq
