@@ -92,14 +92,7 @@ class CrystDataset(Dataset):
             curr_data_dict['rawXRD'] = self.sample(curr_xrd.numpy()) # need to downsample first
             # have sinc with gaussian filter & sinc w/out gaussian filter
             if self.pdf:
-                sample_interval = self.n_presubsample // self.n_postsubsample
-                Qs_sampled = torch.tensor(self.Qs[::sample_interval])
-                sinc_only_postsubsample = self.augment_xrdStrip(curr_xrd, return_both=False) # take sinc filtered xrd
-                rs, the_pdf = self.overall_pdf(Qs=Qs_sampled, signal=sinc_only_postsubsample, num_samples=self.n_postsubsample)
-                curr_data_dict[self.prop] = the_pdf
-                curr_data_dict['sincOnly'] = sinc_only_postsubsample
-                curr_data_dict['sincOnlyPresubsample'] = None
-                curr_data_dict['xrdPresubsample'] = curr_xrd
+                raise ValueError('not supported')
             else:
                 curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
                 curr_data_dict[self.prop] = curr_xrd
@@ -108,23 +101,7 @@ class CrystDataset(Dataset):
                 curr_data_dict['xrdPresubsample'] = curr_xrd_presubsample
 
     def overall_pdf(self, Qs, signal, r_min=0, r_max=30, num_samples=512):
-        assert Qs.shape == signal.shape
-        signal = signal / torch.mean(signal)
-        rs = torch.linspace(r_min, r_max, num_samples)
-        rs_orig = rs
-        the_pdf = list()
-        assert torch.isclose(torch.mean(signal), torch.tensor(1.0).to(dtype=signal.dtype))
-        delta_Q = torch.tensor((Qs[-1] - Qs[0]) / (Qs.shape[0] - 1), dtype=signal.dtype)
-        assert torch.isclose(delta_Q, torch.tensor(Qs[1] - Qs[0], dtype=signal.dtype))
-        Qs = Qs.reshape(-1, 1).expand(-1, num_samples)
-        signal = signal.reshape(-1, 1).expand(-1, num_samples)
-        rs = rs.reshape(1, -1).expand(Qs.shape[0], -1)
-        assert Qs.shape == signal.shape == rs.shape
-        the_pdf = torch.sum(2 / np.pi * Qs * (signal - 1) * torch.sin(Qs * rs) * delta_Q, 0)
-        assert the_pdf.shape == (num_samples,)
-        if self.normalized_pdf:
-            the_pdf /= torch.max(torch.abs(the_pdf))
-        return rs_orig, the_pdf
+        raise ValueError('not supported')
 
     def sample(self, x):
         step_size = int(np.ceil(len(x) / self.n_postsubsample))
@@ -242,12 +219,15 @@ class CrystDataset(Dataset):
 
         if return_both: # want to return double filtered & sinc-only filtered
             assert not self.pdf
-            assert self.xrd_filter == 'both'
-            assert sinc_filtered.shape == curr_xrdStrip.shape
-            # postsubsampling
-            sinc_only_postsubsample = self.post_process_filtered_xrd(sinc_filtered)
-            assert filtered_presubsample.shape == sinc_only_presubsample.shape == (self.n_presubsample,)
-            assert filtered_postsubsampled.shape == sinc_only_postsubsample.shape == (self.n_postsubsample,)
+            if self.xrd_filter == 'both':
+                assert sinc_filtered.shape == curr_xrdStrip.shape
+                # postsubsampling
+                sinc_only_postsubsample = self.post_process_filtered_xrd(sinc_filtered)
+                assert filtered_presubsample.shape == sinc_only_presubsample.shape == (self.n_presubsample,)
+                assert filtered_postsubsampled.shape == sinc_only_postsubsample.shape == (self.n_postsubsample,)
+            elif self.xrd_filter == 'sinc':
+                sinc_only_postsubsample = filtered_postsubsampled
+                sinc_only_presubsample = filtered_presubsample
             return filtered_postsubsampled, sinc_only_postsubsample, filtered_presubsample, sinc_only_presubsample
         return filtered_postsubsampled
     
