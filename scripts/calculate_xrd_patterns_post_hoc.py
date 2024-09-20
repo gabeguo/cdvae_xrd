@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # gaussian patterns
     for path in [
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_',
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_EXPERIMENTAL_',
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_sinc10Filter_',
@@ -237,7 +237,7 @@ if __name__ == "__main__":
 
     for path in [
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc100_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_baseline_noOpt',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_baseline_noOpt',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_'
     ]:
         save_xrds_for_pregenerated_results(
@@ -255,7 +255,7 @@ if __name__ == "__main__":
             input_dirpath=path,
             sinc_size=10,
             filter='both',
-            gaussian_sigma_frac=1e-2
+            gaussian_sigma_frac=1e-3
         )
 
     for path in [
@@ -265,5 +265,5 @@ if __name__ == "__main__":
             input_dirpath=path,
             sinc_size=100,
             filter='both',
-            gaussian_sigma_frac=5e-3
+            gaussian_sigma_frac=1e-3
         )

@@ -138,10 +138,10 @@ if __name__ == "__main__":
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_baseline_noOpt',
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc100_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_baseline_noOpt'
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_baseline_noOpt'
     ]:
         compute_r_values(
             path=path, 
