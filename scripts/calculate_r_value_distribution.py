@@ -6,13 +6,12 @@ import os
 import matplotlib.ticker as ticker
 
 def main(args):
-    all_r_values = [args.r_values_random_json,
-                    args.r_values_latentSearch_json, 
+    all_r_values = [args.r_values_latentSearch_json, 
                     args.r_values_pxrdnet_json]
-    labels = ['Random', 'Latent Search', 'PXRDNet']
-    line_colors = ['red', 'blue', 'green']
+    labels = ['Latent Search', 'PXRDNet']
+    line_colors = ['red', 'green']
     # line_styles = ['solid', 'dashed', 'dotted']
-    hatches = ['.', 'O', '*']
+    hatches = ['O', '*']
     max_x_val = -1
     # calculate values
     for r_values_json, label, line_color, hatch in \
@@ -54,7 +53,7 @@ def main(args):
     print(max_x_val)
     plt.xlim(0, max_x_val)
 
-    plt.ylim(0, 40)
+    plt.ylim(0, 50)
 
     # plot
     os.makedirs(args.output_dir, exist_ok=True)
