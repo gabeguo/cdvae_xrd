@@ -11,7 +11,10 @@ def plot_pxrd(xy_2theta_filepath, save_path):
             _2thetas.append(curr_2theta)
             intensities.append(curr_intensity)
     assert len(_2thetas) == len(intensities)
-    plt.plot(_2thetas, intensities)
+    plt.plot(_2thetas, intensities, linewidth=1)
+    plt.grid()
+    plt.xlim(0, 180)
+    plt.ylim(0, 1)
     plt.savefig(save_path)
     plt.close()
 
