@@ -1,7 +1,7 @@
 python -W ignore conditional_generation.py \
-    --model_path /home/gabeguo/hydra/singlerun/2024-04-07/mp_20_sincSmooth10_EXPERIMENTAL_TEST \
+    --model_path /home/gabeguo/cdvae_xrd/outputs/singlerun/2024-09-11/mp_20_sinc100_EXPERIMENTAL_TEST \
     --num_starting_points 100 \
-    --num_candidates 5 \
+    --num_candidates 10 \
     --lr 0 \
     --min_lr 0 \
     --l2_penalty 2e-4 \
