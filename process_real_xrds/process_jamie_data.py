@@ -83,7 +83,7 @@ def regrid_Q_xrd_pattern(experimental_Qs, xrd_intensities, min_2theta=0, max_2th
 
     return desired_Qs, xrd_tensor
 
-def get_data(filepath, composition):
+def get_data(filepath, composition, idx):
     total_num_atoms = sum([x for x in composition.values()])
     element_list = list()
     for elem in composition:
@@ -102,7 +102,7 @@ def get_data(filepath, composition):
     regridded_q, regridded_xrd = regrid_Q_xrd_pattern(orig_q, orig_grid_xrd_intensity)
 
     return {
-        "material_id": "mp-00",
+        "material_id": f"mp-{idx}",
         "pretty_formula": "".join([f"{a[0]}{a[1]}" for a in composition.items()]),
         "elements": element_list,
         "cif": cif_writer.__str__(),
@@ -119,12 +119,17 @@ if __name__ == "__main__":
         'spacegroup.number': list(),
         'xrd': list()
     })
+    running_count = 0
     for multiple in tqdm(range(1, 5+1)):
-        output_df = output_df._append(get_data('/home/gabeguo/cdvae_xrd/real_data/BL21Robot_0321-2023-09-02-1241_scan2_Mn3Ge.xye', composition={'Mn':3*multiple, 'Ge':1*multiple}), ignore_index=True)
+        output_df = output_df._append(get_data('/home/gabeguo/cdvae_xrd/real_data/BL21Robot_0321-2023-09-02-1241_scan2_Mn3Ge.xye', composition={'Mn':3*multiple, 'Ge':1*multiple}, idx=running_count), ignore_index=True)
+        running_count += 1
     for Ge_multiple in tqdm(range(17+1)):
         for overall_multiple in range(1, 5+1):
             mn_quantity = 3*overall_multiple
             ge_quantity = Ge_multiple*overall_multiple
-            output_df = output_df._append(get_data('/home/gabeguo/cdvae_xrd/real_data/BL21Robot_0327-2023-09-02-1312_scan2_Mn3GeN.xye', composition={'Mn':mn_quantity, 'Ge':ge_quantity}), ignore_index=True)
+            if mn_quantity + ge_quantity > 20:
+                continue
+            output_df = output_df._append(get_data('/home/gabeguo/cdvae_xrd/real_data/BL21Robot_0327-2023-09-02-1312_scan2_Mn3GeN.xye', composition={'Mn':mn_quantity, 'Ge':ge_quantity}, idx=running_count), ignore_index=True)
+            running_count += 1
 
     output_df.to_pickle('/home/gabeguo/cdvae_xrd/real_data/test.csv')
