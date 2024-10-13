@@ -123,7 +123,7 @@ if __name__ == "__main__":
     for multiple in tqdm(range(1, 5+1)):
         output_df = output_df._append(get_data('/home/gabeguo/cdvae_xrd/real_data/BL21Robot_0321-2023-09-02-1241_scan2_Mn3Ge.xye', composition={'Mn':3*multiple, 'Ge':1*multiple}, idx=running_count), ignore_index=True)
         running_count += 1
-    for Ge_multiple in tqdm(range(17+1)):
+    for Ge_multiple in tqdm(range(1, 17+1)):
         for overall_multiple in range(1, 5+1):
             mn_quantity = 3*overall_multiple
             ge_quantity = Ge_multiple*overall_multiple
