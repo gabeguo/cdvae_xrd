@@ -30,7 +30,7 @@ class CrystDataset(Dataset):
                  wavesource='CuKa',
                  horizontal_noise_range=(1e-2, 1.1e-2), # (1e-3, 1.1e-3)
                  vertical_noise=1e-3,
-                 pdf=False, normalized_pdf=False,
+                 pdf=False, normalized_pdf=False, do_not_sinc_gt_xrd=False,
                  **kwargs):
         super().__init__()
         self.path = path
@@ -44,6 +44,7 @@ class CrystDataset(Dataset):
         self.xrd_filter = xrd_filter
         self.pdf = pdf
         self.normalized_pdf = normalized_pdf
+        self.do_not_sinc_gt_xrd = do_not_sinc_gt_xrd
         assert self.xrd_filter in ['gaussian', 'sinc', 'both'], "invalid filter requested"
 
         self.wavelength = WAVELENGTHS[wavesource]
@@ -94,7 +95,7 @@ class CrystDataset(Dataset):
             if self.pdf:
                 raise ValueError('not supported')
             else:
-                curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True)
+                curr_xrd, sinc_only_xrd, curr_xrd_presubsample, sinc_only_xrd_presubsample = self.augment_xrdStrip(curr_xrd, return_both=True, do_not_sinc_gt_xrd=self.do_not_sinc_gt_xrd)
                 curr_data_dict[self.prop] = curr_xrd
                 curr_data_dict['sincOnly'] = sinc_only_xrd
                 curr_data_dict['sincOnlyPresubsample'] = sinc_only_xrd_presubsample
@@ -175,7 +176,7 @@ class CrystDataset(Dataset):
                     mode='constant', cval=0)    
         return filtered
 
-    def augment_xrdStrip(self, curr_xrdStrip, return_both=False):
+    def augment_xrdStrip(self, curr_xrdStrip, return_both=False, do_not_sinc_gt_xrd=False):
         """
         Input:
         -> curr_xrdStrip: XRD pattern of shape (self.n_presubsample,)
@@ -195,7 +196,10 @@ class CrystDataset(Dataset):
         assert xrd.shape == (self.n_presubsample,)
         # Peak broadening
         if self.xrd_filter == 'both':
-            sinc_filtered = self.sinc_filter(xrd)
+            if do_not_sinc_gt_xrd: # it comes from experimental data, which is already broadened!
+                sinc_filtered = xrd
+            else: # this is synthetic data: need to broaden it
+                sinc_filtered = self.sinc_filter(xrd)
             filtered = self.gaussian_filter(sinc_filtered)
             sinc_only_presubsample = torch.from_numpy(sinc_filtered)
             assert filtered.shape == xrd.shape

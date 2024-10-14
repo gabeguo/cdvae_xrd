@@ -83,6 +83,44 @@ def regrid_Q_xrd_pattern(experimental_Qs, xrd_intensities, min_2theta=0, max_2th
 
     return desired_Qs, xrd_tensor
 
+def adjust_background_crude(desired_Qs, xrd_tensor, Q_thresh=3):
+    max_index = len([x for x in desired_Qs if x < Q_thresh])
+    min_index = None
+    start_value = None
+    for i in range(len(xrd_tensor)):
+        if xrd_tensor[i] > 0:
+            min_index = i
+            start_value = xrd_tensor[i]
+            break
+    assert start_value is not None
+    delta_y = start_value / (max_index - min_index)
+    adjusted_xrd_tensor = torch.clone(xrd_tensor)
+    for i in range(min_index, max_index):
+        adjusted_xrd_tensor[i] -= delta_y * (max_index - i)
+    adjusted_xrd_tensor /= torch.max(adjusted_xrd_tensor)
+    
+    return adjusted_xrd_tensor
+
+def plot_xrd(q, regridded_xrd, adjusted_xrd, filepath):
+    if isinstance(q, torch.Tensor):
+        q = q.numpy()
+    if isinstance(regridded_xrd, torch.Tensor):
+        regridded_xrd = regridded_xrd.numpy()
+    if isinstance(adjusted_xrd, torch.Tensor):
+        adjusted_xrd = adjusted_xrd.numpy()
+    
+    plt.plot(q, regridded_xrd, label='Non-background adjusted', alpha=0.6)
+    plt.plot(q, adjusted_xrd, label="Background adjusted", alpha=0.6)
+    plt.xlabel("Q")
+    plt.ylabel("Intensity")
+    plt.legend()
+    save_dir = os.path.dirname(filepath)
+    img_filename = os.path.basename(filepath)[:-4] + "_adjusted_v_orig.png"
+    plt.savefig(os.path.join(save_dir, img_filename))
+    plt.close()
+
+    return
+
 def get_data(filepath, composition, idx):
     total_num_atoms = sum([x for x in composition.values()])
     element_list = list()
@@ -100,6 +138,9 @@ def get_data(filepath, composition, idx):
 
     orig_q, orig_grid_xrd_intensity = get_2theta_intensity(filepath)
     regridded_q, regridded_xrd = regrid_Q_xrd_pattern(orig_q, orig_grid_xrd_intensity)
+    adjusted_xrd = adjust_background_crude(desired_Qs=regridded_q, xrd_tensor=regridded_xrd, Q_thresh=3)
+
+    plot_xrd(regridded_q, regridded_xrd, adjusted_xrd, filepath)
 
     return {
         "material_id": f"mp-{idx}",
@@ -107,7 +148,7 @@ def get_data(filepath, composition, idx):
         "elements": element_list,
         "cif": cif_writer.__str__(),
         "spacegroup.number": 0,
-        "xrd": regridded_xrd
+        "xrd": adjusted_xrd
     }
 
 if __name__ == "__main__":

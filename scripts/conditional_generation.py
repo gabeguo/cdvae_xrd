@@ -392,8 +392,12 @@ def process_candidates(args, xrd_args, j,
         opt_cif_folder_cand = os.path.join(curr_candidate_folder, 'cif')
         os.makedirs(opt_cif_folder_cand, exist_ok=True)
         curr_pred_crystal.structure.to(filename=f'{opt_cif_folder_cand}/noSpacegroup_material{j}_candidate{i}.cif', fmt='cif')
-        pred_cif_writer = CifWriter(curr_pred_crystal.structure, symprec=0.01)
-        pred_cif_writer.write_file(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif')
+        try:
+            pred_cif_writer = CifWriter(curr_pred_crystal.structure, symprec=0.01)
+            pred_cif_writer.write_file(filename=f'{opt_cif_folder_cand}/material{j}_candidate{i}.cif')
+        except Exception as e:
+            print(e)
+            print(f"Fail on candidate {i}")
 
         # Log image
         log_img = collate_images(gt_material=gt_material_filepath, gt_xrd=gt_xrd_filepath,
