@@ -6,6 +6,7 @@ from pymatgen.core import Lattice, Structure, Molecule
 from pymatgen.io.cif import CifWriter
 import torch
 from tqdm import tqdm
+from pymatgen.analysis.diffraction.xrd import XRDCalculator, WAVELENGTHS
 
 WAVELENGTH=0.7294437
 
@@ -56,7 +57,7 @@ def get_2theta_intensity(data_path):
 
     return q_values, _intensities_a
 
-def regrid_Q_xrd_pattern(experimental_Qs, xrd_intensities, min_2theta=0, max_2theta=180, xrd_vector_dim=4096, wavelength=WAVELENGTH):
+def regrid_Q_xrd_pattern(experimental_Qs, xrd_intensities, min_2theta=0, max_2theta=180, xrd_vector_dim=4096, wavelength=WAVELENGTHS['CuKa']):
     xrd_tensor = torch.zeros(xrd_vector_dim)
     min_Q = 4 * np.pi * np.sin(np.radians(min_2theta / 2)) / wavelength
     max_Q = 4 * np.pi * np.sin(np.radians(max_2theta / 2)) / wavelength
