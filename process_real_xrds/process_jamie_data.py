@@ -84,7 +84,7 @@ def regrid_Q_xrd_pattern(experimental_Qs, xrd_intensities, min_2theta=0, max_2th
 
     return desired_Qs, xrd_tensor
 
-def adjust_background_crude(desired_Qs, xrd_tensor, Q_thresh=3):
+def adjust_background_crude(desired_Qs, xrd_tensor, Q_thresh=2.5):
     max_index = len([x for x in desired_Qs if x < Q_thresh])
     min_index = None
     start_value = None
@@ -98,6 +98,10 @@ def adjust_background_crude(desired_Qs, xrd_tensor, Q_thresh=3):
     adjusted_xrd_tensor = torch.clone(xrd_tensor)
     for i in range(min_index, max_index):
         adjusted_xrd_tensor[i] -= delta_y * (max_index - i)
+        adjusted_xrd_tensor[i] = max(0, adjusted_xrd_tensor[i])
+    mini_peak = torch.max(adjusted_xrd_tensor[min_index:max_index])
+    for i in range(min_index, max_index):
+        adjusted_xrd_tensor[i] *= (2 * (adjusted_xrd_tensor[i] / mini_peak - 0.5))**2
     adjusted_xrd_tensor /= torch.max(adjusted_xrd_tensor)
     
     return adjusted_xrd_tensor
@@ -139,7 +143,7 @@ def get_data(filepath, composition, idx):
 
     orig_q, orig_grid_xrd_intensity = get_2theta_intensity(filepath)
     regridded_q, regridded_xrd = regrid_Q_xrd_pattern(orig_q, orig_grid_xrd_intensity)
-    adjusted_xrd = adjust_background_crude(desired_Qs=regridded_q, xrd_tensor=regridded_xrd, Q_thresh=3)
+    adjusted_xrd = adjust_background_crude(desired_Qs=regridded_q, xrd_tensor=regridded_xrd, Q_thresh=2.5)
 
     plot_xrd(regridded_q, regridded_xrd, adjusted_xrd, filepath)
 
@@ -165,7 +169,7 @@ if __name__ == "__main__":
     for multiple in tqdm(range(1, 5+1)):
         output_df = output_df._append(get_data('/home/gabeguo/cdvae_xrd/real_data/BL21Robot_0321-2023-09-02-1241_scan2_Mn3Ge.xye', composition={'Mn':3*multiple, 'Ge':1*multiple}, idx=running_count), ignore_index=True)
         running_count += 1
-    for Ge_multiple in tqdm(range(1, 17+1)):
+    for Ge_multiple in tqdm(range(1, 1+1)):
         for overall_multiple in range(1, 5+1):
             mn_quantity = 3*overall_multiple
             ge_quantity = Ge_multiple*overall_multiple
