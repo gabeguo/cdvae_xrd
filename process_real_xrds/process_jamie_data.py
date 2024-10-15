@@ -101,7 +101,7 @@ def adjust_background_crude(desired_Qs, xrd_tensor, Q_thresh=2.5):
         adjusted_xrd_tensor[i] = max(0, adjusted_xrd_tensor[i])
     mini_peak = torch.max(adjusted_xrd_tensor[min_index:max_index])
     for i in range(min_index, max_index):
-        adjusted_xrd_tensor[i] *= (2 * (adjusted_xrd_tensor[i] / mini_peak - 0.5))**2
+        adjusted_xrd_tensor[i] *= (2 * (adjusted_xrd_tensor[i] / mini_peak - 0.5))**6
     adjusted_xrd_tensor /= torch.max(adjusted_xrd_tensor)
     
     return adjusted_xrd_tensor
