@@ -89,7 +89,7 @@ def get_data(filepath, composition, idx):
         "pretty_formula": "".join([f"{a[0]}{a[1]}" for a in composition.items()]),
         "elements": element_list,
         "cif": cif_writer.__str__(),
-        "spacegroup.number": 0,
+        "spacegroup.number": 1,
         "xrd": regridded_xrd
     }
 
