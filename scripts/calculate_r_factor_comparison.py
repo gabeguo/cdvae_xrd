@@ -21,8 +21,8 @@ GAUSSIAN_SIGMA_FRAC = 5e-3
 
 def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
-    # process_unrefined_dir(args)
-    # process_refined_dir(args)
+    process_unrefined_dir(args)
+    process_refined_dir(args)
     sinc_r_values, refined_r_values = calc_all_r_factors(args)
     plot_r_values(args, sinc_r_values, refined_r_values)
     save_r_values(args, sinc_r_values, refined_r_values)
