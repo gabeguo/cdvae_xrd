@@ -21,8 +21,8 @@ GAUSSIAN_SIGMA_FRAC = 5e-3
 
 def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
-    process_unrefined_dir(args)
-    process_refined_dir(args)
+    # process_unrefined_dir(args)
+    # process_refined_dir(args)
     sinc_r_values, refined_r_values = calc_all_r_factors(args)
     plot_r_values(args, sinc_r_values, refined_r_values)
     save_r_values(args, sinc_r_values, refined_r_values)
@@ -35,7 +35,7 @@ def process_unrefined_dir(args):
             continue
         # ground truth CIF
         gt_cif_filepath = os.path.join(args.unrefined_input_directory, material_folder,
-                                    f"gt_{material_folder}.cif")
+                                    f"{material_folder}_gt.cif")
         assert os.path.exists(gt_cif_filepath)
 
         the_number = int(material_folder.split('_')[0][len('material'):])
@@ -53,32 +53,39 @@ def process_unrefined_dir(args):
         # sinc CIF
         pred_cif_filepath = None
         for candidate in os.listdir(os.path.join(args.unrefined_input_directory, material_folder)):
-            if f'pred_sinc{args.sinc_level}_material' in candidate and material_folder in candidate and '.cif' in candidate:
+            if material_folder in candidate and '.cif' in candidate and 'candidate' in candidate:
                 pred_cif_filepath = os.path.join(args.unrefined_input_directory, material_folder, candidate)
                 assert os.path.exists(pred_cif_filepath)
-                break
+                candidate_number = get_candidate_number(candidate)
+                pred_output_filepath_without_ext = os.path.join(args.output_dir, f"{the_number}_{candidate_number}_pred_sinc{args.sinc_level}_")
+                generate_and_save_xrd_for_cif_file(
+                    cif_filepath=pred_cif_filepath,
+                    output_filepath_without_ext=pred_output_filepath_without_ext,
+                    wave_source=WAVE_SOURCE, xrd_vector_dim=XRD_VECTOR_DIM, 
+                    min_2_theta=MIN_2_THETA, max_2_theta=MAX_2_THETA,
+                    nanomaterial_size=NANOMATERIAL_SIZE, 
+                    plot_xrd=PLOT_XRD,
+                    broadening=BROADENING, gaussian_sigma_frac=GAUSSIAN_SIGMA_FRAC
+                )
         assert pred_cif_filepath is not None, material_folder
-        pred_output_filepath_without_ext = os.path.join(args.output_dir, f"{the_number}_pred_sinc{args.sinc_level}_")
-        generate_and_save_xrd_for_cif_file(
-            cif_filepath=pred_cif_filepath,
-            output_filepath_without_ext=pred_output_filepath_without_ext,
-            wave_source=WAVE_SOURCE, xrd_vector_dim=XRD_VECTOR_DIM, 
-            min_2_theta=MIN_2_THETA, max_2_theta=MAX_2_THETA,
-            nanomaterial_size=NANOMATERIAL_SIZE, 
-            plot_xrd=PLOT_XRD,
-            broadening=BROADENING, gaussian_sigma_frac=GAUSSIAN_SIGMA_FRAC
-        )
 
     return
+
+def get_candidate_number(cif_filename):
+    candidate_number_start_idx = cif_filename.index('candidate') + len('candidate')
+    candidate_number_end_idx = cif_filename.index('.cif')
+    candidate_number = int(cif_filename[candidate_number_start_idx:candidate_number_end_idx])
+    return candidate_number
 
 def process_refined_dir(args):
     assert os.path.exists(args.refined_input_directory)
     for cif_filename in tqdm(os.listdir(args.refined_input_directory)):
-        if '_fit.cif' not in cif_filename:
+        if not('candidate' in cif_filename and '.cif' in cif_filename):
             continue
-        the_number = int(cif_filename.split('_')[0])
+        item_number = int(cif_filename.split('_')[0][len('material'):])
+        candidate_number = get_candidate_number(cif_filename)
         cif_filepath = os.path.join(args.refined_input_directory, cif_filename)
-        output_filepath_without_ext = os.path.join(args.output_dir, f"{the_number}_refined")
+        output_filepath_without_ext = os.path.join(args.output_dir, f"{item_number}_{candidate_number}_refined")
         generate_and_save_xrd_for_cif_file(
             cif_filepath=cif_filepath,
             output_filepath_without_ext=output_filepath_without_ext,
@@ -105,8 +112,8 @@ def calc_all_r_factors(args):
     gt_xrd_filenames = [x for x in os.listdir(args.output_dir) if '_gt.pt' in x]
     pred_xrd_filenames = [x for x in os.listdir(args.output_dir) if f'_pred_sinc{args.sinc_level}_.pt' in x]
     refined_xrd_filenames = [x for x in os.listdir(args.output_dir) if '_refined.pt' in x]
-    assert len(gt_xrd_filenames) == len(refined_xrd_filenames)
-    assert len(gt_xrd_filenames) == len(pred_xrd_filenames)
+    assert len(pred_xrd_filenames) == len(refined_xrd_filenames)
+    assert 10 * len(gt_xrd_filenames) == len(pred_xrd_filenames), f"{len(gt_xrd_filenames)} {len(pred_xrd_filenames)}"
     assert len(gt_xrd_filenames) == 20, gt_xrd_filenames
 
     sinc_r_values = list()
@@ -118,19 +125,24 @@ def calc_all_r_factors(args):
                 [pred_xrd_filenames, refined_xrd_filenames]):
         material_to_r = dict()
         for curr_gt_filename in gt_xrd_filenames:
-            curr_pred_filename = curr_gt_filename.replace('gt', prediction_level)
-            assert curr_pred_filename in curr_possible_pred_filenames, f"{curr_pred_filename} not in {curr_possible_pred_filenames}"
+            for candidate_idx in range(0, 10):
+                curr_pred_filename = curr_gt_filename.replace('gt', f"{candidate_idx}_{prediction_level}")
+                assert curr_pred_filename in curr_possible_pred_filenames, f"{curr_pred_filename} not in {curr_possible_pred_filenames}"
 
-            gt_xrd = torch.load(os.path.join(args.output_dir, curr_gt_filename))
-            pred_xrd = torch.load(os.path.join(args.output_dir, curr_pred_filename))
+                gt_xrd = torch.load(os.path.join(args.output_dir, curr_gt_filename))
+                pred_xrd = torch.load(os.path.join(args.output_dir, curr_pred_filename))
 
-            r = calc_r_factor(gt_xrd=gt_xrd, pred_xrd=pred_xrd, Qs=Qs)
-            #print(f"\t{curr_gt_filename}: r = {r:.3f}")
+                r = calc_r_factor(gt_xrd=gt_xrd, pred_xrd=pred_xrd, Qs=Qs)
+                #print(f"\t{curr_gt_filename}: r = {r:.3f}")
 
-            material_num = int(curr_gt_filename.split('_')[0])
-            material_to_r[material_num] = r
+                # TODO: logic to take min
+                material_num = int(curr_gt_filename.split('_')[0])
+                if material_num in material_to_r:
+                    material_to_r[material_num] = min(material_to_r[material_num], r)
+                else:
+                    material_to_r[material_num] = r
 
-            r_value_list.append(r)
+                r_value_list.append(r)
 
         # write results
         with open(os.path.join(args.output_dir, f'Rw_values_{prediction_level}.txt'), 'w') as fout:
