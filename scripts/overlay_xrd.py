@@ -5,11 +5,13 @@ import os
 from tqdm import tqdm
 
 def plot_xrds(theta, gt, ai_pred, refined, filepath):
-    plt.plot(theta, gt, label='Ground Truth', linestyle='-', color='#99ee99bb')
-    plt.plot(theta, ai_pred, label='AI Raw Prediction', linestyle='dotted', color='#ee9999bb')
-    plt.plot(theta, refined, label='AI + Rietveld', linestyle='dashed', color='#9999eebb')
+    plt.plot(theta, gt, label='Ground Truth', linestyle='-', color='#99ee99ee')
+    plt.plot(theta, ai_pred, label='AI Raw Prediction', linestyle='dotted', color='#ee9999ee')
+    plt.plot(theta, refined, label='AI + Rietveld', linestyle='dashed', color='#9999eeee')
 
     plt.xlabel(r'2$\\theta$')
+    plt.legend()
+    plt.tight_layout()
 
     plt.savefig(filepath)
     plt.close()
