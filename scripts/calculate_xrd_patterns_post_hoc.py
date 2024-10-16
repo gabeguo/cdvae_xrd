@@ -221,12 +221,8 @@ def save_sinc_xrds_for_curated_results(input_dirpath):
 if __name__ == "__main__":
     # gaussian patterns
     for path in [
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
-        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_EXPERIMENTAL_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_sinc10Filter_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_baseline_noOpt'
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_'
     ]:
         save_xrds_for_pregenerated_results(
             input_dirpath=path,
@@ -236,9 +232,19 @@ if __name__ == "__main__":
         )
 
     for path in [
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc100_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_baseline_noOpt',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc100_'
+    ]:
+        save_xrds_for_pregenerated_results(
+            input_dirpath=path,
+            sinc_size=100,
+            filter='gaussian',
+            gaussian_sigma_frac=5e-3
+        )
+
+    for path in [
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_sinc100Filter_',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_baseline_noOpt'
     ]:
         save_xrds_for_pregenerated_results(
             input_dirpath=path,

@@ -134,8 +134,8 @@ if __name__ == "__main__":
 
     for path in [
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_EXPERIMENTAL_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_sinc10Filter_',
-        # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_baseline_noOpt',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_sinc100Filter_',
+        '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/experimental_baseline_noOpt',
         # '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_random_baseline_sinc10_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_',
         '/home/gabeguo/cdvae_xrd/paper_results_PRELIM/_sinc10_baseline_noOpt',
