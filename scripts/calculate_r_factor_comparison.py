@@ -125,6 +125,7 @@ def calc_all_r_factors(args):
                 [pred_xrd_filenames, refined_xrd_filenames]):
         material_to_r = dict()
         for curr_gt_filename in gt_xrd_filenames:
+            r_value_list.append(list())
             for candidate_idx in range(0, 10):
                 curr_pred_filename = curr_gt_filename.replace('gt', f"{candidate_idx}_{prediction_level}")
                 assert curr_pred_filename in curr_possible_pred_filenames, f"{curr_pred_filename} not in {curr_possible_pred_filenames}"
@@ -142,7 +143,9 @@ def calc_all_r_factors(args):
                 else:
                     material_to_r[material_num] = r
 
-                r_value_list.append(r)
+                r_value_list[-1].append(r)
+            r_value_list[-1] = min(r_value_list[-1])
+            # TODO: this takes the min r-value from the set
 
         # write results
         with open(os.path.join(args.output_dir, f'Rw_values_{prediction_level}.txt'), 'w') as fout:
