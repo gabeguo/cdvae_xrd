@@ -116,16 +116,14 @@ def calc_all_r_factors(args):
     assert 10 * len(gt_xrd_filenames) == len(pred_xrd_filenames), f"{len(gt_xrd_filenames)} {len(pred_xrd_filenames)}"
     assert len(gt_xrd_filenames) == 20, gt_xrd_filenames
 
-    sinc_r_values = list()
-    refined_r_values = list()
+    sinc_r_values = dict()
+    refined_r_values = dict()
 
-    for prediction_level, r_value_list, curr_possible_pred_filenames in \
+    for prediction_level, r_value_dict, curr_possible_pred_filenames in \
             zip([f"pred_sinc{args.sinc_level}_", "refined"], 
                 [sinc_r_values, refined_r_values],
                 [pred_xrd_filenames, refined_xrd_filenames]):
-        material_to_r = dict()
         for curr_gt_filename in gt_xrd_filenames:
-            r_value_list.append(list())
             for candidate_idx in range(0, 10):
                 curr_pred_filename = curr_gt_filename.replace('gt', f"{candidate_idx}_{prediction_level}")
                 assert curr_pred_filename in curr_possible_pred_filenames, f"{curr_pred_filename} not in {curr_possible_pred_filenames}"
@@ -136,26 +134,34 @@ def calc_all_r_factors(args):
                 r = calc_r_factor(gt_xrd=gt_xrd, pred_xrd=pred_xrd, Qs=Qs)
                 #print(f"\t{curr_gt_filename}: r = {r:.3f}")
 
-                # TODO: logic to take min
                 material_num = int(curr_gt_filename.split('_')[0])
-                if material_num in material_to_r:
-                    material_to_r[material_num] = min(material_to_r[material_num], r)
-                else:
-                    material_to_r[material_num] = r
-
-                r_value_list[-1].append(r)
-            r_value_list[-1] = min(r_value_list[-1])
-            # TODO: this takes the min r-value from the set
+                if material_num not in r_value_dict:
+                    r_value_dict[material_num] = list()
+                r_value_dict[material_num].append(r)
 
         # write results
-        with open(os.path.join(args.output_dir, f'Rw_values_{prediction_level}.txt'), 'w') as fout:
-            for material_num in sorted(material_to_r):
-                fout.write(f"{material_num} {100 * material_to_r[material_num]}\n")
+        with open(os.path.join(args.output_dir, f'Rw_values_{prediction_level}.json'), 'w') as fout:
+            json.dump({x:r_value_dict[x] for x in sorted(r_value_dict)}, fout, indent=4)
     
     with open(os.path.join(args.output_dir, 'params.json'), 'w') as fout:
         json.dump(vars(args), fout)
 
     return sinc_r_values, refined_r_values
+
+def get_best_refinement(sinc_r_values, refined_r_values):
+    """
+    Takes the best candidate, according to r-value of refined version
+    """
+    selected_sinc_r_values = list()
+    best_refined_r_values = list()
+    assert sinc_r_values.keys() == refined_r_values.keys()
+    for material_num in refined_r_values:
+        best_idx = np.argmin(refined_r_values[material_num])
+        
+        selected_sinc_r_values.append(sinc_r_values[material_num][best_idx])
+        best_refined_r_values.append(refined_r_values[material_num][best_idx])
+    
+    return selected_sinc_r_values, best_refined_r_values
 
 def plot_r_values(args, sinc_r_values, refined_r_values):
     plt.rcParams["figure.figsize"] = (6, 6)
@@ -163,6 +169,7 @@ def plot_r_values(args, sinc_r_values, refined_r_values):
     plt.rc('xtick', labelsize=14)
     plt.rc('ytick', labelsize=14)
     # plot
+    sinc_r_values, refined_r_values = get_best_refinement(sinc_r_values, refined_r_values)
     plt.plot(sinc_r_values, refined_r_values, 'o')
     plt.xlabel('$R_{wp}^{2}$: raw AI generation')
     if args.sinc_level == 100:
@@ -199,12 +206,20 @@ def plot_r_values(args, sinc_r_values, refined_r_values):
     return
 
 def save_r_values(args, sinc_r_values, refined_r_values):
+    sinc_r_values = np.array([x for x in sinc_r_values.values()])
+    refined_r_values = np.array([x for x in refined_r_values.values()])
+    assert sinc_r_values.shape == (20, 10), f"{sinc_r_values.shape}"
+    assert refined_r_values.shape == (20, 10), f"{refined_r_values.shape}"
     with open(os.path.join(args.output_dir, 'r_value_comparison.json'), 'w') as fout:
         results = {
-            'pre-refinement r-value (mean)': np.mean(sinc_r_values),
-            'pre-refinement r-value (std)': np.std(sinc_r_values),
-            'post-refinement r-value (mean)': np.mean(refined_r_values),
-            'post-refinement r-value (std)': np.std(refined_r_values)
+            'pre-refinement ALL r-value (mean)': np.mean(sinc_r_values),
+            'pre-refinement ALL r-value (std)': np.std(sinc_r_values),
+            'post-refinement ALL r-value (mean)': np.mean(refined_r_values),
+            'post-refinement ALL r-value (std)': np.std(refined_r_values),
+            'pre-refinement BEST r-value (mean)': np.mean([min(x) for x in sinc_r_values]),
+            'pre-refinement BEST r-value (std)': np.std([min(x) for x in sinc_r_values]),
+            'post-refinement BEST r-value (mean)': np.mean([min(x) for x in refined_r_values]),
+            'post-refinement BEST r-value (std)': np.std([min(x) for x in refined_r_values])
         }
         json.dump(results, fout, indent=4)
     return
