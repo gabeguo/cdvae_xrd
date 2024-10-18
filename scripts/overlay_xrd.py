@@ -50,7 +50,7 @@ def get_best_candidate_lookup(args):
     return lookup
 
 def main(args):
-    # best_candidate_by_material = get_best_candidate_lookup(args)
+    best_candidate_by_material = get_best_candidate_lookup(args)
     sinc_level = args.input_dir.split('/')[-1]
     with open(os.path.join(args.input_dir, f"Rw_values_pred_{sinc_level}_.json"), 'r') as fin:
         pre_refinement_rs = json.load(fin)
@@ -62,7 +62,7 @@ def main(args):
         if '_gt.xy' in filename:
             theta, gt_xrd = load_xrd(os.path.join(args.input_dir, filename))
             material_num = int(filename.split('_')[0])
-            candidate_num = np.argmin(post_refinement_rs[material_num]) #best_candidate_by_material[material_num][0]
+            candidate_num = best_candidate_by_material[material_num][0] # np.argmin(post_refinement_rs[material_num])
             # raw AI pred
             pred_filename = filename.replace('gt', f'{candidate_num}_pred_{sinc_level}_')
             pred_filepath = os.path.join(args.input_dir, pred_filename)
