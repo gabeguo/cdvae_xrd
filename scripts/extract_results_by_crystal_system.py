@@ -52,7 +52,7 @@ def postprocess(aggregate_results):
     return
 
 def get_r_factor(material_full_name, r_factor_dict):
-    return max(r_factor_dict[material_full_name].values())
+    return min(r_factor_dict[material_full_name].values())
     
 def main(args):
     aggregate_results = dict()
