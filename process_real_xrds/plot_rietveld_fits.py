@@ -37,7 +37,7 @@ for filepath in [
 
     # Adding labels and title
     plt.xlabel(r'2$\theta$ (degrees)')
-    plt.ylabel('Intensity')
+    plt.ylabel('Intensity (arb. units)')
     # plt.title('Rietveld Refinement Results')
     plt.legend()
     plt.grid(True)
