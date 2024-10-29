@@ -26,10 +26,10 @@ for filepath in [
     plt.figure(figsize=(10, 6))
 
     # Plot observed intensity with error bars
-    plt.plot(two_theta, observed_intensity, color='blue', alpha=0.6, label='Experimentally Observed PXRD', linewidth=2)
+    plt.plot(two_theta, observed_intensity, color='blue', alpha=0.6, label='Experimentally Observed PXRD', linewidth=1.5)
 
     # Plot predicted intensity
-    plt.plot(two_theta, predicted_intensity, color='red', alpha=0.6, label='Predicted Candidate (AI + Rietveld) PXRD', linewidth=2)
+    plt.plot(two_theta, predicted_intensity, color='red', alpha=0.6, label='Predicted Candidate (AI + Rietveld) PXRD', linewidth=1.5)
 
     # Adding labels and title
     plt.xlabel(r'2$\theta$ (degrees)')
@@ -38,9 +38,11 @@ for filepath in [
     plt.legend()
     plt.grid(True)
 
-    filename = os.path.basename(filepath)
-    output_filepath = os.path.join(output_dir, f'pxrd_fit_{filename}.pdf')
+    plt.tight_layout()
 
-    # Display the plot
-    plt.savefig(output_filepath)
+    filename = os.path.basename(filepath)
+    for filetype in ["pdf", "png"]:
+        output_filepath = os.path.join(output_dir, f'pxrd_fit_{filename}.{filetype}')
+        # Display the plot
+        plt.savefig(output_filepath, dpi=400)
     plt.close()
