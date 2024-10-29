@@ -26,10 +26,13 @@ for filepath in [
     plt.figure(figsize=(10, 6))
 
     # Plot observed intensity with error bars
-    plt.plot(two_theta, observed_intensity, color='blue', alpha=0.6, label='Experimentally Observed PXRD', linewidth=1.5)
+    plt.plot(two_theta, observed_intensity, color='green', alpha=0.6, label='Experimentally Observed PXRD', linewidth=1.5)
 
     # Plot predicted intensity
-    plt.plot(two_theta, predicted_intensity, color='red', alpha=0.6, label='Predicted Candidate (AI + Rietveld) PXRD', linewidth=1.5)
+    plt.plot(two_theta, predicted_intensity, color='blue', alpha=0.6, label='Predicted Candidate (AI + Rietveld) PXRD', linewidth=1.5)
+
+    # Plot predicted intensity
+    plt.plot(two_theta, error, color='red', alpha=0.6, label='Residual', linewidth=1.5)
 
     # Adding labels and title
     plt.xlabel(r'2$\theta$ (degrees)')
