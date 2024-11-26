@@ -22,7 +22,7 @@ Much thanks to [CDVAE](https://github.com/txie-93/cdvae).
 
 ## Requirements
 
-Use Python 3.9.18.
+Use Python 3.9.18 with Linux.
 
 In our experience, depending on the system, you may have trouble with:
 - [PyTorch Scatter](https://github.com/rusty1s/pytorch_scatter)
@@ -51,7 +51,9 @@ Setup environment variables by making a copy of the `.env.template` file and ren
 Finally, install this package with
 ```
 pip install -e .
-``` 
+```
+
+This process, if done correctly, should take less than an hour.
 
 ## Data Procurement
 
