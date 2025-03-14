@@ -202,8 +202,8 @@ If you find the code in this repository helpful, please cite the following:
 
 ```
 @article{guo2024diffusion,
-  title={Diffusion Models Are Promising for Ab Initio Structure Solutions from Nanocrystalline Powder Diffraction Data},
-  author={Guo, Gabe and Saidi, Tristan and Terban, Maxwell and Billinge, Simon JL and Lipson, Hod},
+  title={Ab Initio Structure Solutions from Nanocrystalline Powder Diffraction Data},
+  author={Guo, Gabe and Saidi, Tristan and Terban, Maxwell and Valsecchi, Michele and Billinge, Simon JL and Lipson, Hod},
   journal={arXiv preprint arXiv:2406.10796},
   year={2024}
 }
