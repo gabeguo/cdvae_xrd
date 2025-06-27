@@ -55,6 +55,10 @@ pip install -e .
 
 This process, if done correctly, should take less than an hour.
 
+## Pre-Trained Model Weights
+
+You can find our trained model weights on [Huggingface](https://huggingface.co/therealgabeguo/cdvae_xrd_sinc10). 
+
 ## Data Procurement
 
 ### Use Our Data
